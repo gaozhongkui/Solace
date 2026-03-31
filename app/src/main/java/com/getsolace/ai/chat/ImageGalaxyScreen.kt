@@ -89,7 +89,7 @@ data class ImageParticle(
 // 3D Math  (mirrors the Swift SIMD3 logic)
 // ─────────────────────────────────────────
 
-private fun spherePoint(index: Int, total: Int, radius: Double = 155.0): Vec3 {
+private fun spherePoint(index: Int, total: Int, radius: Double = 280.0): Vec3 {
     val phi   = acos(1.0 - 2.0 * index / max(total, 1))
     val theta = index * PI * (3.0 - sqrt(5.0))
     return Vec3(
@@ -99,7 +99,7 @@ private fun spherePoint(index: Int, total: Int, radius: Double = 155.0): Vec3 {
     )
 }
 
-private fun heartPoint(t: Double, radius: Double = 125.0): Vec3 {
+private fun heartPoint(t: Double, radius: Double = 230.0): Vec3 {
     val a = t * 2.0 * PI
     val s = sin(a); val s3 = s * s * s
     val x = radius * 0.85 * s3
@@ -110,16 +110,16 @@ private fun heartPoint(t: Double, radius: Double = 125.0): Vec3 {
 private fun spiralPoint(index: Int, total: Int, time: Double): Vec3 {
     val t     = index.toDouble() / max(total - 1, 1)
     val angle = t * 5.0 * PI + time * 0.08
-    val r     = 40.0 + 130.0 * t
-    return Vec3(r * cos(angle), (t - 0.5) * 320.0, r * sin(angle))
+    val r     = 60.0 + 220.0 * t
+    return Vec3(r * cos(angle), (t - 0.5) * 520.0, r * sin(angle))
 }
 
 private fun dnaPoint(index: Int, total: Int, time: Double): Vec3 {
     val t      = index.toDouble() / max(total - 1, 1)
     val strand = if (index % 2 == 0) 0.0 else PI
     val angle  = t * 5.0 * PI + strand + time * 0.06
-    val r      = 80.0
-    return Vec3(r * cos(angle), (t - 0.5) * 320.0, r * sin(angle))
+    val r      = 140.0
+    return Vec3(r * cos(angle), (t - 0.5) * 520.0, r * sin(angle))
 }
 
 private fun scatteredPoint(seed: Int, width: Float, height: Float): Vec3 {
@@ -131,7 +131,7 @@ private fun scatteredPoint(seed: Int, width: Float, height: Float): Vec3 {
 
 private fun ringPoint(index: Int, total: Int): Vec3 {
     val angle = 2.0 * PI * index / max(total, 1)
-    val r     = 160.0
+    val r     = 260.0
     return Vec3(r * sin(angle), 0.0, r * cos(angle))
 }
 
@@ -212,13 +212,6 @@ private fun DrawScope.drawParticle(
         else -> circleClipPath(cx, cy, half)
     }
 
-    // Soft glow halo
-    drawCircle(
-        color = glowColor.copy(alpha = 0.30f * alpha),
-        radius = half + 5f,
-        center = Offset(cx, cy),
-        blendMode = BlendMode.Screen
-    )
 
     val bmp = p.bitmap
     if (bmp != null) {
@@ -442,8 +435,8 @@ fun ImageGalaxyScreen() {
                                         val pos3 = positionFor(p, currentShape, total, t, isRingMode, w, h)
                                         val rot  = rotate(pos3, rotX, rotY)
                                         val proj = project(rot, w, h)
-                                        val sz   = if (isRingMode) 90f + 55f * proj.scale
-                                                   else 55f + 25f * proj.scale
+                                        val sz   = if (isRingMode) 120f + 80f * proj.scale
+                                                   else 80f + 60f * proj.scale
                                         val dx = proj.x - offset.x; val dy = proj.y - offset.y
                                         val dist = sqrt(dx * dx + dy * dy)
                                         if (dist < minDist) { minDist = dist; nearest = p; nearestSz = sz }
@@ -528,7 +521,7 @@ fun ImageGalaxyScreen() {
                     val pos3   = positionFor(p, currentShape, total, animationTime, isRingMode, w, h)
                     val rotated = rotate(pos3, rotX, rotY)
                     val proj   = project(rotated, w, h)
-                    val pSize  = if (isRingMode) 90f + 55f * proj.scale else 55f + 25f * proj.scale
+                    val pSize  = if (isRingMode) 120f + 80f * proj.scale else 80f + 60f * proj.scale
                     val alpha  = (0.25f + proj.scale * 0.75f).coerceIn(0f, 1f)
                     drawParticle(p, currentShape, proj.x, proj.y, pSize, alpha, glowColor)
                 }
