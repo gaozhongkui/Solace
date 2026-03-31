@@ -9,6 +9,13 @@ import android.os.Build
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.util.Log
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.core.content.ContextCompat
+import java.util.concurrent.Executors
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -273,6 +280,42 @@ private suspend fun loadGalleryImages(context: Context, max: Int): List<Pair<Int
     }
 
 // ─────────────────────────────────────────
+// 粒子命中检测（触摸 & 手势共用）
+// ─────────────────────────────────────────
+
+private fun hitTestParticle(
+    tapOffset: Offset,
+    particles: List<ImageParticle>,
+    shape: GalaxyShape,
+    animTime: Double,
+    dragXVal: Float,
+    dragYVal: Float,
+    isRingMode: Boolean,
+    zoom: Float,
+    canvasW: Float,
+    canvasH: Float
+): ImageParticle? {
+    val total = particles.size
+    val rotY = if (isRingMode) animTime * 0.5 + dragXVal / 55.0
+               else animTime * 0.10 + dragXVal / 160.0
+    val rotX = if (isRingMode) 0.38 else animTime * 0.07 + dragYVal / 160.0
+
+    var nearest: ImageParticle? = null
+    var minDist = Float.MAX_VALUE
+    var nearestSz = 0f
+
+    for (p in particles) {
+        val proj = project(rotate(positionFor(p, shape, total, animTime, isRingMode, canvasW, canvasH), rotX, rotY), canvasW, canvasH)
+        val sz = (if (isRingMode) 120f + 80f * proj.scale else 80f + 60f * proj.scale) * zoom
+        val zx = canvasW / 2f + (proj.x - canvasW / 2f) * zoom
+        val zy = canvasH / 2f + (proj.y - canvasH / 2f) * zoom
+        val d = sqrt((zx - tapOffset.x) * (zx - tapOffset.x) + (zy - tapOffset.y) * (zy - tapOffset.y))
+        if (d < minDist) { minDist = d; nearest = p; nearestSz = sz }
+    }
+    return if (nearest != null && minDist < nearestSz * 0.7f) nearest else null
+}
+
+// ─────────────────────────────────────────
 // Main Composable
 // ─────────────────────────────────────────
 
@@ -300,6 +343,40 @@ fun ImageGalaxyScreen() {
 
     val isRingMode = particles.isNotEmpty() && particles.size < 10
 
+    // 手势控制
+    var gestureEnabled  by remember { mutableStateOf(false) }
+    var cameraPermission by remember { mutableStateOf(false) }
+    var cursorPos       by remember { mutableStateOf<Offset?>(null) }
+    val lifecycleOwner  = LocalLifecycleOwner.current
+    val cameraExecutor  = remember { Executors.newSingleThreadExecutor() }
+
+    val gestureController = remember {
+        HandGestureController(
+            context  = context,
+            onZoom   = { factor -> zoomScale = (zoomScale * factor).coerceIn(0.3f, 4.0f) },
+            onTap    = { nx, ny ->
+                val sx = nx * canvasSize.width
+                val sy = ny * canvasSize.height
+                val hit = hitTestParticle(
+                    Offset(sx, sy), particles, currentShape, animationTime,
+                    dragX.value, dragY.value, isRingMode, zoomScale,
+                    canvasSize.width, canvasSize.height
+                )
+                if (hit != null) selectedParticle = hit
+                else if (selectedParticle != null) selectedParticle = null
+            },
+            onCursor = { nx, ny ->
+                cursorPos = if (nx != null && ny != null)
+                    Offset(nx * canvasSize.width, ny * canvasSize.height)
+                else null
+            }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { gestureController.close(); cameraExecutor.shutdown() }
+    }
+
     val glowColor = remember(currentShape) {
         when (currentShape) {
             GalaxyShape.HEART -> Color(0xFFEC4899)
@@ -316,12 +393,57 @@ fun ImageGalaxyScreen() {
         scope.launch { delay(1400); isTransitioning = false }
     }
 
-    // ── Permission ──
+    // ── 相册权限 ──
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { if (it) hasPermission = true }
 
+    // ── 相机权限 ──
+    val cameraPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) cameraPermission = true }
+
+    // ── 开启摄像头 + MediaPipe ──
+    LaunchedEffect(gestureEnabled, cameraPermission) {
+        if (!gestureEnabled || !cameraPermission) return@LaunchedEffect
+
+        // init() 加载 8MB 模型，必须在 IO 线程，否则主线程卡顿
+        withContext(Dispatchers.IO) { gestureController.init() }
+
+        val future = ProcessCameraProvider.getInstance(context)
+        future.addListener({
+            runCatching {
+                val provider = future.get()
+                val analysis = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                    .build()
+                    .also { ia ->
+                        // processFrame 不调用 imageProxy.image，无需 @ExperimentalGetImage
+                        ia.setAnalyzer(cameraExecutor) { proxy ->
+                            gestureController.processFrame(proxy)
+                        }
+                    }
+                provider.unbindAll()
+                provider.bindToLifecycle(
+                    lifecycleOwner,
+                    CameraSelector.DEFAULT_FRONT_CAMERA,
+                    analysis
+                )
+            }.onFailure { Log.e("Galaxy", "Camera bind failed: $it") }
+        }, ContextCompat.getMainExecutor(context))
+    }
+
+    // 关闭手势时清理光标
+    LaunchedEffect(gestureEnabled) {
+        if (!gestureEnabled) { cursorPos = null; gestureController.close() }
+    }
+
     LaunchedEffect(Unit) {
+        // 检查相机权限是否已授予
+        if (context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            cameraPermission = true
+        }
         // Stars
         val rng = Random(System.nanoTime())
         stars = (0 until 130).map {
@@ -427,35 +549,13 @@ fun ImageGalaxyScreen() {
                                         selectedParticle = null
                                         return@detectTapGestures
                                     }
-                                    val w = canvasSize.width; val h = canvasSize.height
-                                    val total = particles.size
-                                    val t = animationTime
-                                    val dxVal = dragX.value.toDouble()
-                                    val dyVal = dragY.value.toDouble()
-                                    val rotY = if (isRingMode) t * 0.5 + dxVal / 55.0
-                                               else t * 0.10 + dxVal / 160.0
-                                    val rotX = if (isRingMode) 0.38
-                                               else t * 0.07 + dyVal / 160.0
-
-                                    var nearest: ImageParticle? = null
-                                    var minDist = Float.MAX_VALUE
-                                    var nearestSz = 0f
-
-                                    for (p in particles) {
-                                        val pos3 = positionFor(p, currentShape, total, t, isRingMode, w, h)
-                                        val rot  = rotate(pos3, rotX, rotY)
-                                        val proj = project(rot, w, h)
-                                        val sz   = (if (isRingMode) 120f + 80f * proj.scale
-                                                   else 80f + 60f * proj.scale) * zoomScale
-                                        // 投影坐标也随 zoom 从中心缩放
-                                        val zx = w / 2f + (proj.x - w / 2f) * zoomScale
-                                        val zy = h / 2f + (proj.y - h / 2f) * zoomScale
-                                        val dx = zx - offset.x; val dy = zy - offset.y
-                                        val dist = sqrt(dx * dx + dy * dy)
-                                        if (dist < minDist) { minDist = dist; nearest = p; nearestSz = sz }
-                                    }
-                                    if (nearest != null && minDist < nearestSz * 0.7f) {
-                                        selectedParticle = nearest
+                                    val hit = hitTestParticle(
+                                        offset, particles, currentShape, animationTime,
+                                        dragX.value, dragY.value, isRingMode, zoomScale,
+                                        canvasSize.width, canvasSize.height
+                                    )
+                                    if (hit != null) {
+                                        selectedParticle = hit
                                         lastInteraction  = animationTime
                                     }
                                 }
@@ -544,14 +644,58 @@ fun ImageGalaxyScreen() {
             }
         }
 
+        // ── 手势光标 overlay ──
+        cursorPos?.let { pos ->
+            Canvas(Modifier.fillMaxSize()) {
+                // 外圈
+                drawCircle(color = Color(0xFF22D3EE).copy(0.25f), radius = 28f, center = pos)
+                // 内点
+                drawCircle(color = Color.White.copy(0.9f), radius = 8f, center = pos)
+                // 十字线
+                drawLine(Color.White.copy(0.5f), pos.copy(x = pos.x - 18f), pos.copy(x = pos.x + 18f), 1f)
+                drawLine(Color.White.copy(0.5f), pos.copy(y = pos.y - 18f), pos.copy(y = pos.y + 18f), 1f)
+            }
+        }
+
         // ── HUD Overlay ──
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
             Spacer(Modifier.height(56.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
+                // 手势开关按钮（左上角）
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            color = if (gestureEnabled) Color(0xFF22D3EE).copy(0.25f)
+                                    else Color.White.copy(0.08f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .pointerInput(Unit) {
+                            detectTapGestures {
+                                if (!gestureEnabled) {
+                                    if (cameraPermission) {
+                                        gestureEnabled = true
+                                    } else {
+                                        cameraPermLauncher.launch(Manifest.permission.CAMERA)
+                                    }
+                                } else {
+                                    gestureEnabled = false
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (gestureEnabled) "✋" else "🖐",
+                        fontSize = 20.sp
+                    )
+                }
+
                 Column(horizontalAlignment = Alignment.End) {
                     val titleColor = if (currentShape == GalaxyShape.HEART)
                         Color(0xFFEC4899) else Color(0xFF22D3EE)
