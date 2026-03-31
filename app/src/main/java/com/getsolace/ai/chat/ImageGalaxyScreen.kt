@@ -22,6 +22,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -294,6 +295,9 @@ fun ImageGalaxyScreen() {
     val dragX = remember { Animatable(0f) }
     val dragY = remember { Animatable(0f) }
 
+    // Pinch zoom  (0.3x ~ 4.0x)
+    var zoomScale by remember { mutableFloatStateOf(1f) }
+
     val isRingMode = particles.isNotEmpty() && particles.size < 10
 
     val glowColor = remember(currentShape) {
@@ -389,6 +393,12 @@ fun ImageGalaxyScreen() {
                 .onSizeChanged { sz -> canvasSize = Size(sz.width.toFloat(), sz.height.toFloat()) }
                 .pointerInput(Unit) {
                     coroutineScope {
+                        // Pinch → zoom
+                        launch {
+                            detectTransformGestures { _, _, zoom, _ ->
+                                zoomScale = (zoomScale * zoom).coerceIn(0.3f, 4.0f)
+                            }
+                        }
                         // Drag → rotate
                         launch {
                             detectDragGestures(
@@ -435,9 +445,12 @@ fun ImageGalaxyScreen() {
                                         val pos3 = positionFor(p, currentShape, total, t, isRingMode, w, h)
                                         val rot  = rotate(pos3, rotX, rotY)
                                         val proj = project(rot, w, h)
-                                        val sz   = if (isRingMode) 120f + 80f * proj.scale
-                                                   else 80f + 60f * proj.scale
-                                        val dx = proj.x - offset.x; val dy = proj.y - offset.y
+                                        val sz   = (if (isRingMode) 120f + 80f * proj.scale
+                                                   else 80f + 60f * proj.scale) * zoomScale
+                                        // 投影坐标也随 zoom 从中心缩放
+                                        val zx = w / 2f + (proj.x - w / 2f) * zoomScale
+                                        val zy = h / 2f + (proj.y - h / 2f) * zoomScale
+                                        val dx = zx - offset.x; val dy = zy - offset.y
                                         val dist = sqrt(dx * dx + dy * dy)
                                         if (dist < minDist) { minDist = dist; nearest = p; nearestSz = sz }
                                     }
@@ -521,9 +534,12 @@ fun ImageGalaxyScreen() {
                     val pos3   = positionFor(p, currentShape, total, animationTime, isRingMode, w, h)
                     val rotated = rotate(pos3, rotX, rotY)
                     val proj   = project(rotated, w, h)
-                    val pSize  = if (isRingMode) 120f + 80f * proj.scale else 80f + 60f * proj.scale
+                    val pSize  = (if (isRingMode) 120f + 80f * proj.scale else 80f + 60f * proj.scale) * zoomScale
                     val alpha  = (0.25f + proj.scale * 0.75f).coerceIn(0f, 1f)
-                    drawParticle(p, currentShape, proj.x, proj.y, pSize, alpha, glowColor)
+                    // 整体从屏幕中心缩放，超出屏幕也正常绘制
+                    val zx = w / 2f + (proj.x - w / 2f) * zoomScale
+                    val zy = h / 2f + (proj.y - h / 2f) * zoomScale
+                    drawParticle(p, currentShape, zx, zy, pSize, alpha, glowColor)
                 }
             }
         }
