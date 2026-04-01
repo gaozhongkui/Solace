@@ -174,7 +174,7 @@ private fun DrawScope.drawGalaxyParticle(
 // ─────────────────────────────────────────
 
 @Composable
-fun ImageGalaxyScreen() {
+fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
