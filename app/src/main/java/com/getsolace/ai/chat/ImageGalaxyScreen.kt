@@ -7,8 +7,12 @@ import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.provider.MediaStore
+import android.util.Size as CameraSize
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -38,6 +42,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import java.util.concurrent.Executors
 import kotlinx.coroutines.*
 import kotlin.math.*
 import kotlin.random.Random
@@ -184,6 +189,15 @@ fun ImageGalaxyScreen() {
     val dragY = remember { Animatable(0f) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
 
+    // ── 手势控制器相关状态 ──
+    var hasCameraPermission by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+    }
+    var cursorPos by remember { mutableStateOf<Offset?>(null) }
+    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    // Activity 实现了 LifecycleOwner，此处安全转型
+    val lifecycleOwner = context as androidx.lifecycle.LifecycleOwner
+
     val glowColor = remember(currentShape) {
         when(currentShape) {
             GalaxyShape.HEART -> Color(0xFFFF2D55)
@@ -194,7 +208,83 @@ fun ImageGalaxyScreen() {
         }
     }
 
+    // 相机权限申请回调
+    val cameraPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        hasCameraPermission = granted
+    }
+
+    // 手势控制器 — 将手势回调桥接到 Galaxy 状态
+    val gestureController = remember {
+        HandGestureController(
+            context = context,
+            onZoom = { factor ->
+                zoomScale = (zoomScale * factor).coerceIn(0.5f, 3.5f)
+            },
+            onTap = { nx, ny ->
+                // 归一化坐标 → canvas 像素坐标，复用现有命中检测
+                if (canvasSize.width > 0f) {
+                    val tapOffset = Offset(nx * canvasSize.width, ny * canvasSize.height)
+                    val rotY = animationTime * 0.12 + dragX.value / 180.0
+                    val rotX = animationTime * 0.08 + dragY.value / 180.0
+                    var nearest: ImageParticle? = null
+                    var minDist = Float.MAX_VALUE
+                    particles.forEach { p ->
+                        val pos = rotate(
+                            positionFor(p, currentShape, particles.size, animationTime, canvasSize.width, canvasSize.height),
+                            rotX, rotY
+                        )
+                        val proj = project(pos, canvasSize.width, canvasSize.height, zoomScale)
+                        val dist = sqrt((proj.x - tapOffset.x).pow(2) + (proj.y - tapOffset.y).pow(2))
+                        if (dist < 100f * proj.scale && dist < minDist) { minDist = dist; nearest = p }
+                    }
+                    selectedParticle = nearest
+                }
+            },
+            onCursor = { nx, ny ->
+                cursorPos = if (nx != null && ny != null && canvasSize.width > 0f)
+                    Offset(nx * canvasSize.width, ny * canvasSize.height)
+                else null
+            }
+        )
+    }
+
+    // 相机权限获取后，初始化 HandLandmarker 并绑定 CameraX ImageAnalysis
+    LaunchedEffect(hasCameraPermission) {
+        android.util.Log.d("GalaxyScreen", "LaunchedEffect: hasCameraPermission=$hasCameraPermission")
+        if (!hasCameraPermission) {
+            android.util.Log.w("GalaxyScreen", "相机权限未授予，跳过初始化")
+            return@LaunchedEffect
+        }
+        withContext(Dispatchers.IO) { gestureController.init() }
+        @Suppress("DEPRECATION")
+        val analysis = ImageAnalysis.Builder()
+            .setTargetResolution(CameraSize(640, 480))
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+            .build()
+            .also { it.setAnalyzer(cameraExecutor, gestureController::processFrame) }
+        try {
+            val provider = withContext(Dispatchers.IO) { ProcessCameraProvider.getInstance(context).get() }
+            provider.unbindAll()
+            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
+            android.util.Log.d("GalaxyScreen", "CameraX 绑定成功 ✓ 前置摄像头已启动")
+        } catch (e: Exception) {
+            android.util.Log.e("GalaxyScreen", "CameraX 绑定失败 ✗ ${e.message}")
+        }
+    }
+
+    // 页面销毁时释放资源
+    DisposableEffect(Unit) {
+        onDispose {
+            gestureController.close()
+            cameraExecutor.shutdown()
+        }
+    }
+
     LaunchedEffect(Unit) {
+        // 申请相机权限（图片权限在下方同步检查）
+        if (!hasCameraPermission) cameraPermLauncher.launch(Manifest.permission.CAMERA)
+
         val rng = Random(System.nanoTime())
         stars = (0 until 180).map { StarParticle(rng.nextFloat(), rng.nextFloat(), 1f + rng.nextFloat() * 2.5f, 0.2f + rng.nextFloat() * 0.7f, rng.nextFloat() * 10f) }
         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
@@ -259,6 +349,12 @@ fun ImageGalaxyScreen() {
                     val pSize = (95f + 65f * proj.scale) * (1f + 0.05f * sin(animationTime * 2.5 + p.seed % 10).toFloat())
                     drawGalaxyParticle(p, proj.x, proj.y, pSize, (0.25f + (proj.scale * 0.75f)).coerceIn(0f, 1f), glowColor, currentShape)
                 }
+            }
+
+            // 手势光标：食指尖位置实时显示
+            cursorPos?.let { pos ->
+                drawCircle(glowColor.copy(alpha = 0.6f), radius = 22f, center = pos, style = Stroke(width = 2.5f))
+                drawCircle(Color.White.copy(alpha = 0.35f), radius = 8f, center = pos)
             }
         }
 

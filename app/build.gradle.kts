@@ -47,6 +47,8 @@ dependencies {
     // MediaPipe Hand Gesture
     implementation("com.google.mediapipe:tasks-vision:0.10.0")
 
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
     // CameraX
     implementation("androidx.camera:camera-core:1.3.1")
     implementation("androidx.camera:camera-camera2:1.3.1")

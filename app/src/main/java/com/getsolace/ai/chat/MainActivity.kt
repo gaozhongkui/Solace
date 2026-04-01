@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.getsolace.ai.chat.ui.LocalImageSphereTunnel
 import com.getsolace.ai.chat.ui.theme.SolaceTheme
 
 class MainActivity : ComponentActivity() {
@@ -12,7 +13,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             SolaceTheme {
-                ImageGalaxyScreen()
+                LocalImageSphereTunnel()
             }
         }
     }
