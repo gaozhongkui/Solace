@@ -1,4 +1,4 @@
-package com.getsolace.ai.chat.ui.screens
+package com.getsolace.ai.chat.ui.screens.gallery
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -20,9 +20,9 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import com.getsolace.ai.chat.Photo
-import com.getsolace.ai.chat.ScreenScaffold
-import com.getsolace.ai.chat.rememberGalleryPhotos
+import com.getsolace.ai.chat.data.Photo
+import com.getsolace.ai.chat.ui.screens.ScreenScaffold
+import com.getsolace.ai.chat.data.rememberGalleryPhotos
 
 data class PolaroidState(
     val photo: Photo,

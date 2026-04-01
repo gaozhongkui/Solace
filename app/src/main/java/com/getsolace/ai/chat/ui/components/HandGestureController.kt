@@ -1,4 +1,4 @@
-package com.getsolace.ai.chat
+package com.getsolace.ai.chat.ui.components
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -86,9 +86,7 @@ class HandGestureController(
             imageProxy.close()
             return
         }
-        // 只在第1帧和每隔100帧打印一次，避免刷屏
         val shouldLog = frameCount == 1 || frameCount % 100 == 0
-        // 在 close 之前先读好所有元数据
         val width  = imageProxy.width
         val height = imageProxy.height
         val deg    = imageProxy.imageInfo.rotationDegrees.toFloat()
@@ -96,12 +94,10 @@ class HandGestureController(
         if (shouldLog) Log.d(TAG, "processFrame: 第 $frameCount 帧 size=${width}x${height} rotation=$deg format=$format")
 
         try {
-            // 先把像素数据完整拷贝到 Bitmap，再 close ImageProxy（只 close 一次）
             val raw = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             raw.copyPixelsFromBuffer(imageProxy.planes[0].buffer)
-            imageProxy.close()   // ← 唯一的 close，数据已拷走
+            imageProxy.close()
 
-            // 旋转 + 水平镜像（前置摄像头画面是镜像的）
             val mat = Matrix().apply {
                 postRotate(deg)
                 postScale(-1f, 1f)
@@ -111,19 +107,18 @@ class HandGestureController(
             lm.detectAsync(BitmapImageBuilder(processed).build(), SystemClock.uptimeMillis())
         } catch (e: Exception) {
             Log.e(TAG, "processFrame: 帧处理失败 $e")
-            imageProxy.close()   // 异常时补 close
+            imageProxy.close()
         }
     }
 
-    private var resultCount = 0  // onResult 调用计数
-    private var noHandCount = 0  // 连续无手帧计数（避免刷屏）
+    private var resultCount = 0
+    private var noHandCount = 0
 
     private fun onResult(result: HandLandmarkerResult, @Suppress("UNUSED_PARAMETER") input: Any) {
         resultCount++
 
         if (result.landmarks().isEmpty()) {
             noHandCount++
-            // 刚离开时打一次，之后每100帧打一次
             if (noHandCount == 1 || noHandCount % 100 == 0) {
                 Log.d(TAG, "onResult: 未检测到手 (连续 $noHandCount 帧)")
             }
@@ -136,33 +131,27 @@ class HandGestureController(
 
         noHandCount = 0
         val hand  = result.landmarks()[0]
-        val thumb = hand[4]   // THUMB_TIP
-        val index = hand[8]   // INDEX_FINGER_TIP
+        val thumb = hand[4]
+        val index = hand[8]
 
         val dx   = thumb.x() - index.x()
         val dy   = thumb.y() - index.y()
         val dist = sqrt(dx * dx + dy * dy)
 
-        // EMA 平滑：消除 MediaPipe 单帧抖动，同时保留连续变化趋势
         smoothDist = if (smoothDist < 0f) dist else smoothDist * 0.6f + dist * 0.4f
 
-        // 光标位置（食指尖）
         val curX = index.x()
         val curY = index.y()
 
-        // 缩放：用平滑距离的帧间比值，与触屏 detectTransformGestures 逻辑一致
-        // 不设死区，只限每帧合理变化范围（0.85..1.18），防止突变
         val zoomFactor = if (prevPinchDist > PINCH_CLOSE && smoothDist > PINCH_CLOSE) {
             val f = smoothDist / prevPinchDist
             if (f in 0.85f..1.18f) f else null
         } else null
 
-        // 点击：合拢瞬间触发一次（用原始 dist 判断，响应更灵敏）
         val shouldTap = !isPinching && dist < PINCH_CLOSE
         if (shouldTap)                       isPinching = true
         if (isPinching && dist > PINCH_OPEN) isPinching = false
 
-        // 每30帧打印一次手部状态
         if (resultCount % 30 == 0) {
             Log.d(TAG, "onResult: 手已检测 | cursor=(%.2f, %.2f) | dist=%.3f smooth=%.3f prev=%.3f | zoom=${"%.3f".format(zoomFactor ?: 1f)} pinching=$isPinching".format(curX, curY, dist, smoothDist, prevPinchDist))
         }
@@ -175,7 +164,6 @@ class HandGestureController(
 
         prevPinchDist = smoothDist
 
-        // 全部在主线程回调，保证 Compose State 安全
         mainHandler.post {
             onCursor(curX, curY)
             zoomFactor?.let { onZoom(it) }

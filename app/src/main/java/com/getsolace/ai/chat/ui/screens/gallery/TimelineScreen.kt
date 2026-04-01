@@ -1,4 +1,4 @@
-package com.getsolace.ai.chat.ui.screens
+package com.getsolace.ai.chat.ui.screens.gallery
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,7 +17,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import com.getsolace.ai.chat.*
+import com.getsolace.ai.chat.data.Photo
+import com.getsolace.ai.chat.data.formatDateLabel
+import com.getsolace.ai.chat.data.groupByDate
+import com.getsolace.ai.chat.ui.screens.ScreenScaffold
+import com.getsolace.ai.chat.data.rememberGalleryPhotos
 
 @Composable
 fun TimelineScreen(navController: NavController) {

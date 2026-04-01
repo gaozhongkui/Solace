@@ -1,4 +1,4 @@
-package com.getsolace.ai.chat
+package com.getsolace.ai.chat.data
 
 import android.Manifest
 import android.content.ContentUris

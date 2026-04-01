@@ -28,8 +28,14 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import com.getsolace.ai.chat.data.AIImageStore
 import com.getsolace.ai.chat.data.VaultStore
-import com.getsolace.ai.chat.ui.screens.*
 import com.getsolace.ai.chat.ui.screens.ai.CreateAIScreen
+import com.getsolace.ai.chat.ui.screens.gallery.ImageGalaxyScreen
+import com.getsolace.ai.chat.ui.screens.gallery.MosaicScreen
+import com.getsolace.ai.chat.ui.screens.gallery.PolaroidScreen
+import com.getsolace.ai.chat.ui.screens.gallery.RadialScreen
+import com.getsolace.ai.chat.ui.screens.gallery.StackedCardsScreen
+import com.getsolace.ai.chat.ui.screens.gallery.StoryScreen
+import com.getsolace.ai.chat.ui.screens.gallery.TimelineScreen
 import com.getsolace.ai.chat.ui.screens.home.HomeScreen
 import com.getsolace.ai.chat.ui.screens.me.MeScreen
 import com.getsolace.ai.chat.ui.screens.vault.VaultScreen

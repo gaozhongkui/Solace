@@ -1,4 +1,4 @@
-package com.getsolace.ai.chat.ui
+package com.getsolace.ai.chat.ui.components
 
 import android.Manifest
 import android.content.ContentUris
@@ -43,10 +43,8 @@ fun LocalImageSphereTunnel() {
     var size by remember { mutableStateOf(IntSize.Zero) }
 
     val scrollPos = remember { Animatable(0f) }
-    // 存储实际 Bitmap，与 ImageGalaxyScreen 加载方式保持一致
     val bitmaps = remember { mutableStateListOf<android.graphics.Bitmap?>() }
 
-    // 与 ImageGalaxyScreen 相同的加载方式：权限检查 + openInputStream + BitmapFactory
     LaunchedEffect(Unit) {
         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
             Manifest.permission.READ_MEDIA_IMAGES
@@ -94,7 +92,6 @@ fun LocalImageSphereTunnel() {
                 }
             )
     ) {
-        // 将加载好的 Bitmap 交给 Coil 管理（缓存、渲染）
         val painters = bitmaps.map { bmp ->
             rememberAsyncImagePainter(
                 model = ImageRequest.Builder(context)
@@ -131,7 +128,6 @@ fun LocalImageSphereTunnel() {
                         reusablePath.addOval(Rect(Offset(x - radius, y - radius), Size(radius * 2, radius * 2)))
 
                         clipPath(reusablePath) {
-                            // translate 到圆的左上角，让 painter 从该位置开始绘制
                             translate(left = x - radius, top = y - radius) {
                                 with(painter) {
                                     draw(

@@ -1,4 +1,4 @@
-package com.getsolace.ai.chat
+package com.getsolace.ai.chat.ui.screens.gallery
 
 import android.Manifest
 import android.content.ContentUris
@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.getsolace.ai.chat.ui.components.HandGestureController
 import java.util.concurrent.Executors
 import kotlinx.coroutines.*
 import kotlin.math.*
@@ -189,13 +190,11 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
     val dragY = remember { Animatable(0f) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
 
-    // ── 手势控制器相关状态 ──
     var hasCameraPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
     var cursorPos by remember { mutableStateOf<Offset?>(null) }
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
-    // Activity 实现了 LifecycleOwner，此处安全转型
     val lifecycleOwner = context as androidx.lifecycle.LifecycleOwner
 
     val glowColor = remember(currentShape) {
@@ -208,12 +207,10 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
         }
     }
 
-    // 相机权限申请回调
     val cameraPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasCameraPermission = granted
     }
 
-    // 手势控制器 — 将手势回调桥接到 Galaxy 状态
     val gestureController = remember {
         HandGestureController(
             context = context,
@@ -221,7 +218,6 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
                 zoomScale = (zoomScale * factor).coerceIn(0.5f, 3.5f)
             },
             onTap = { nx, ny ->
-                // 归一化坐标 → canvas 像素坐标，复用现有命中检测
                 if (canvasSize.width > 0f) {
                     val tapOffset = Offset(nx * canvasSize.width, ny * canvasSize.height)
                     val rotY = animationTime * 0.12 + dragX.value / 180.0
@@ -248,7 +244,6 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
         )
     }
 
-    // 相机权限获取后，初始化 HandLandmarker 并绑定 CameraX ImageAnalysis
     LaunchedEffect(hasCameraPermission) {
         android.util.Log.d("GalaxyScreen", "LaunchedEffect: hasCameraPermission=$hasCameraPermission")
         if (!hasCameraPermission) {
@@ -273,7 +268,6 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
         }
     }
 
-    // 页面销毁时释放资源
     DisposableEffect(Unit) {
         onDispose {
             gestureController.close()
@@ -282,7 +276,6 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
     }
 
     LaunchedEffect(Unit) {
-        // 申请相机权限（图片权限在下方同步检查）
         if (!hasCameraPermission) cameraPermLauncher.launch(Manifest.permission.CAMERA)
 
         val rng = Random(System.nanoTime())
@@ -313,7 +306,6 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
                     detectTapGestures(
                         onDoubleTap = { currentShape = currentShape.next() },
                         onTap = { offset ->
-                            // --- 命中检测实装 ---
                             if (canvasSize.width == 0f) return@detectTapGestures
                             val rotY = animationTime * 0.12 + dragX.value / 180.0
                             val rotX = animationTime * 0.08 + dragY.value / 180.0
@@ -351,14 +343,12 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
                 }
             }
 
-            // 手势光标：食指尖位置实时显示
             cursorPos?.let { pos ->
                 drawCircle(glowColor.copy(alpha = 0.6f), radius = 22f, center = pos, style = Stroke(width = 2.5f))
                 drawCircle(Color.White.copy(alpha = 0.35f), radius = 8f, center = pos)
             }
         }
 
-        // HUD 界面
         Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             Column(modifier = Modifier.align(Alignment.TopEnd).padding(20.dp), horizontalAlignment = Alignment.End) {
                 Text(text = currentShape.displayName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = 2.sp)
@@ -369,7 +359,6 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
             }
         }
 
-        // 大图查看器
         AnimatedVisibility(visible = selectedParticle != null, enter = fadeIn() + scaleIn(initialScale = 0.9f), exit = fadeOut() + scaleOut(targetScale = 0.9f)) {
             val p = selectedParticle ?: return@AnimatedVisibility
             Box(Modifier.fillMaxSize().blur(15.dp).background(Color.Black.copy(0.7f)).pointerInput(Unit) { detectTapGestures { selectedParticle = null } })
