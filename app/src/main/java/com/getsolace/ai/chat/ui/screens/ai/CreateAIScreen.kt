@@ -95,9 +95,10 @@ fun CreateAIScreen(
 
 @Composable
 fun AILabFeedScreen(vm: AIViewModel) {
-    val feedItems   by UnifiedFeedManager.items.collectAsStateWithLifecycle()
-    val isFeedLoading by UnifiedFeedManager.isLoading.collectAsStateWithLifecycle()
-    val myHistory   by AIImageStore.images.collectAsStateWithLifecycle()
+    val feedItems      by UnifiedFeedManager.items.collectAsStateWithLifecycle()
+    val isFeedLoading  by UnifiedFeedManager.isLoading.collectAsStateWithLifecycle()
+    val isLoadingMore  by UnifiedFeedManager.isLoadingMore.collectAsStateWithLifecycle()
+    val myHistory      by AIImageStore.images.collectAsStateWithLifecycle()
     var showConfig  by remember { mutableStateOf(false) }
     var selectedFeedItem by remember { mutableStateOf<FeedItem?>(null) }
 
@@ -167,7 +168,17 @@ fun AILabFeedScreen(vm: AIViewModel) {
                     if (feedItems.isEmpty() && !isFeedLoading) {
                         AIEmptyState(modifier = Modifier.weight(1f))
                     } else {
+                        val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+                        // Trigger loadMore when within 4 items of the end
+                        LaunchedEffect(gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index) {
+                            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
+                            val total = gridState.layoutInfo.totalItemsCount
+                            if (total > 0 && lastVisible >= total - 4) {
+                                UnifiedFeedManager.loadMore()
+                            }
+                        }
                         LazyVerticalGrid(
+                            state                 = gridState,
                             columns               = GridCells.Fixed(2),
                             contentPadding        = PaddingValues(AppSpacing.md),
                             horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
@@ -179,6 +190,22 @@ fun AILabFeedScreen(vm: AIViewModel) {
                                     item    = feedItem,
                                     onClick = { selectedFeedItem = feedItem }
                                 )
+                            }
+                            if (isLoadingMore) {
+                                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                                    Box(
+                                        modifier        = Modifier
+                                            .fillMaxWidth()
+                                            .padding(AppSpacing.md),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color       = AccentPrimary,
+                                            modifier    = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

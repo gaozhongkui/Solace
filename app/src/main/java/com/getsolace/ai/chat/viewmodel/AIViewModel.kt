@@ -72,10 +72,12 @@ class AIViewModel : ViewModel() {
                 }
 
                 val fullPrompt = buildFullPrompt()
-                val imageUrl   = PollinationsApi.generateImage(
+                val model     = PollinationsApi.modelForStyle(_selectedStyle.value.id)
+                val imageUrl  = PollinationsApi.generateImage(
                     prompt = fullPrompt,
                     width  = _selectedRatio.value.apiWidth(),
-                    height = _selectedRatio.value.apiHeight()
+                    height = _selectedRatio.value.apiHeight(),
+                    model  = model
                 )
 
                 progressJob.cancel()
@@ -119,13 +121,27 @@ class AIViewModel : ViewModel() {
 }
 
 // ─── Pollinations API (mirrors iOS PollinationsImageGenerator.swift) ──────────
+//
+// Uses gen.pollinations.ai (same as iOS) with API key and per-style model selection.
+// Style → model mapping mirrors iOS AIViewModel.swift:
+//   davinci → gptimage, turbo → turbo, seedream → seedream, others → flux
 
 object PollinationsApi {
 
-    suspend fun generateImage(prompt: String, width: Int, height: Int): String {
+    private const val API_KEY = "sk_UhsZmc01AcRpoVcqd9I83kLCJLGy8OS8"
+
+    // Map style id to Pollinations model name (mirrors iOS)
+    fun modelForStyle(styleId: String): String = when (styleId) {
+        "davinci"   -> "gptimage"
+        "turbo"     -> "turbo"
+        "seedream"  -> "seedream"
+        else        -> "flux"
+    }
+
+    suspend fun generateImage(prompt: String, width: Int, height: Int, model: String = "flux"): String {
         val encoded = URLEncoder.encode(prompt, "UTF-8")
-        // Pollinations free API — no key required
         val seed = (Math.random() * 100000).toInt()
-        return "https://image.pollinations.ai/prompt/$encoded?width=$width&height=$height&seed=$seed&nologo=true"
+        // Use gen.pollinations.ai endpoint with API key (mirrors iOS)
+        return "https://gen.pollinations.ai/image/$encoded?model=$model&width=$width&height=$height&seed=$seed&nologo=true&key=$API_KEY"
     }
 }
