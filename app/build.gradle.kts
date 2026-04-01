@@ -43,18 +43,43 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
 
     // MediaPipe Hand Gesture
     implementation("com.google.mediapipe:tasks-vision:0.10.0")
 
+    // Image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
 
+    // Navigation
     implementation("androidx.navigation:navigation-compose:2.8.0")
 
     // CameraX
     implementation("androidx.camera:camera-core:1.3.1")
     implementation("androidx.camera:camera-camera2:1.3.1")
     implementation("androidx.camera:camera-lifecycle:1.3.1")
+
+    // Security / Encryption
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Network (Retrofit + OkHttp for AI API)
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // Gson
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    // Permissions helper
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+
+    // Compose Material Icons Extended
+    implementation("androidx.compose.material:material-icons-extended:1.6.8")
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
