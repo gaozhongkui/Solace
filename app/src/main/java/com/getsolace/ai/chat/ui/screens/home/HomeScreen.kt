@@ -32,6 +32,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.request.videoFrameMillis
 import com.getsolace.ai.chat.data.MediaCategory
@@ -562,15 +568,8 @@ fun AuraMediaGrid(
         ) {
             leftItems.forEach { item ->
                 AuraMediaCard(
-                    item        = item,
-                    onClick     = { navController.navigate("video_list/${item.category.name}") },
-                    onPlayClick = item.thumbnail?.takeIf { item.category != MediaCategory.SCREENSHOTS }?.let { uri ->
-                        {
-                            val encodedUri   = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
-                            val encodedTitle = java.net.URLEncoder.encode(item.category.title, "UTF-8")
-                            navController.navigate("video_player/$encodedUri/$encodedTitle")
-                        }
-                    }
+                    item    = item,
+                    onClick = { navController.navigate("video_list/${item.category.name}") }
                 )
             }
         }
@@ -580,15 +579,8 @@ fun AuraMediaGrid(
         ) {
             rightItems.forEach { item ->
                 AuraMediaCard(
-                    item        = item,
-                    onClick     = { navController.navigate("video_list/${item.category.name}") },
-                    onPlayClick = item.thumbnail?.takeIf { item.category != MediaCategory.SCREENSHOTS }?.let { uri ->
-                        {
-                            val encodedUri   = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
-                            val encodedTitle = java.net.URLEncoder.encode(item.category.title, "UTF-8")
-                            navController.navigate("video_player/$encodedUri/$encodedTitle")
-                        }
-                    }
+                    item    = item,
+                    onClick = { navController.navigate("video_list/${item.category.name}") }
                 )
             }
         }
@@ -602,11 +594,8 @@ fun AuraMediaGrid(
 @Composable
 fun AuraMediaCard(
     item: HomeCardItem,
-    onClick: () -> Unit,
-    onPlayClick: (() -> Unit)? = null
+    onClick: () -> Unit
 ) {
-
-    // 每个分类对应颜色 & 高度
     val accent = when (item.category) {
         MediaCategory.ALL_VIDEOS        -> ColorAllVideo
         MediaCategory.SHORT_VIDEOS      -> ColorShort
@@ -619,53 +608,85 @@ fun AuraMediaCard(
         MediaCategory.SCREEN_RECORDINGS -> 148.dp
         MediaCategory.SCREENSHOTS       -> 118.dp
     }
-    // 对应设计稿中卡片背景渐变方向
-    val cardBg = Brush.linearGradient(
-        listOf(CardSurface, Color(0xFF0D1117))
-    )
+    val isVideoCategory = item.category != MediaCategory.SCREENSHOTS
+
+    // ── ExoPlayer（仅视频分类且有 URI 时创建）──────────────────────────────
+    val context = LocalContext.current
+    val player: ExoPlayer? = if (isVideoCategory && item.thumbnail != null) {
+        remember(item.thumbnail) {
+            ExoPlayer.Builder(context).build().apply {
+                setMediaItem(MediaItem.fromUri(item.thumbnail))
+                prepare()
+                playWhenReady = true
+                volume        = 0f                        // 静音
+                repeatMode    = Player.REPEAT_MODE_ONE   // 循环
+            }
+        }
+    } else null
+
+    DisposableEffect(player) {
+        onDispose { player?.release() }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(cardH)
             .clip(RoundedCornerShape(16.dp))
-            .background(cardBg)
+            .background(Brush.linearGradient(listOf(CardSurface, Color(0xFF0D1117))))
             .border(1.dp, CardBorder, RoundedCornerShape(16.dp))
             .clickable { onClick() }
     ) {
-        // 缩略图（有则显示）
-        if (item.thumbnail != null) {
-            val context = LocalContext.current
+        // ── 背景层：视频自动播放 或 截图静态缩略图 或 纯色占位 ──────────────
+        if (player != null) {
+            // 视频分类：嵌入 PlayerView 自动播放
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        this.player = player
+                        useController = false
+                        resizeMode    = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    }
+                },
+                update  = { it.player = player },
+                modifier = Modifier.fillMaxSize()
+            )
+            // 轻微暗色遮罩，保证文字可读
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.35f))
+            )
+        } else if (item.thumbnail != null) {
+            // 截图分类：静态图片
             AsyncImage(
                 model = coil.request.ImageRequest.Builder(context)
                     .data(item.thumbnail)
-                    .videoFrameMillis(1000)   // 取第 1 秒帧作为封面
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
                 contentScale       = ContentScale.Crop,
                 modifier           = Modifier.fillMaxSize()
             )
-            // 暗色遮罩
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.48f))
+                    .background(Color.Black.copy(alpha = 0.45f))
             )
         } else {
-            // 无缩略图时用 accent 色微渐变占位
+            // 无媒体：accent 色渐变占位
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.linearGradient(
-                            listOf(accent.copy(alpha = 0.12f), Color.Transparent)
+                            listOf(accent.copy(alpha = 0.14f), Color.Transparent)
                         )
                     )
             )
         }
 
-        // 底部信息渐变遮罩
+        // ── 底部渐变遮罩 ──────────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -673,12 +694,12 @@ fun AuraMediaCard(
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f))
+                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
                     )
                 )
         )
 
-        // 左上角分类徽标
+        // ── 左上角分类徽标 ────────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .padding(10.dp)
@@ -692,34 +713,19 @@ fun AuraMediaCard(
             CategoryBadgeIcon(item.category, accent)
         }
 
-        // 视频播放按钮（视频类别居中显示，有 onPlayClick 时可直接播放）
-        if (item.category != MediaCategory.SCREENSHOTS) {
+        // ── 右上角"正在播放"指示点（仅视频分类）────────────────────────────
+        if (isVideoCategory && player != null) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .padding(10.dp)
+                    .size(7.dp)
                     .clip(CircleShape)
-                    .background(
-                        if (onPlayClick != null) Color.White.copy(alpha = 0.22f)
-                        else Color.White.copy(alpha = 0.12f)
-                    )
-                    .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
-                    .align(Alignment.Center)
-                    .then(
-                        if (onPlayClick != null) Modifier.clickable { onPlayClick() }
-                        else Modifier
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.PlayArrow,
-                    contentDescription = "播放",
-                    tint     = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+                    .background(Color(0xFF34C759))   // 绿点 = 正在播放
+                    .align(Alignment.TopEnd)
+            )
         }
 
-        // 左下角文字
+        // ── 左下角文字 ────────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
