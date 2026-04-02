@@ -1,32 +1,34 @@
 package com.getsolace.ai.chat.ui.screens.home
 
 import android.Manifest
-import android.net.Uri
 import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -37,7 +39,42 @@ import com.getsolace.ai.chat.viewmodel.HomeCardItem
 import com.getsolace.ai.chat.viewmodel.HomeViewModel
 import com.google.accompanist.permissions.*
 
-// ─── Home Screen (mirrors iOS HomeView.swift) ─────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Design Tokens  — 与设计稿完全对齐
+// ═══════════════════════════════════════════════════════════════════════════════
+
+private val DeepBg          = Color(0xFF0A0B14)
+private val CardSurface     = Color(0xFF111827)
+private val CardBorder      = Color(0x0FFFFFFF)     // 6% 白
+
+// Violet 系 (主紫)
+private val VioletBright    = Color(0xFF9B7AFF)
+private val VioletMid       = Color(0x558B68F7)
+private val VioletFaint     = Color(0x1E8B68F7)
+private val VioletBorder    = Color(0x558B68F7)
+
+// Teal 系 (3D星系 / 短视频)
+private val TealBright      = Color(0xFF00D4B4)
+private val TealFaint       = Color(0x1A00D4B4)
+private val TealBorder      = Color(0x3300C8AA)
+
+// Blue 系 (AI 生图)
+private val BlueBright      = Color(0xFF38B2F8)
+private val BlueFaint       = Color(0x1A38B2F8)
+
+// Accent per category
+private val ColorAllVideo   = Color(0xFF5B8DEF)
+private val ColorShort      = Color(0xFF2DBD9A)
+private val ColorScreenRec  = Color(0xFFF08C4B)
+private val ColorScreenshot = Color(0xFFE05C8A)
+
+private val TextPri         = Color(0xFFFFFFFF)
+private val TextSec         = Color(0x73FFFFFF)   // 45%
+private val TextTer         = Color(0x40FFFFFF)   // 25%
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  HomeScreen
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -45,432 +82,485 @@ fun HomeScreen(
     navController: NavController,
     vm: HomeViewModel = viewModel()
 ) {
-    val context          = LocalContext.current
-    val isScanning       by vm.isScanning.collectAsStateWithLifecycle()
-    val scanProgress     by vm.scanProgress.collectAsStateWithLifecycle()
-    val scannedSize      by vm.scannedSize.collectAsStateWithLifecycle()
-    val cardLeftItems    by vm.cardLeftItems.collectAsStateWithLifecycle()
-    val cardRightItems   by vm.cardRightItems.collectAsStateWithLifecycle()
+    val context        = LocalContext.current
+    val isScanning     by vm.isScanning.collectAsStateWithLifecycle()
+    val scanProgress   by vm.scanProgress.collectAsStateWithLifecycle()
+    val scannedSize    by vm.scannedSize.collectAsStateWithLifecycle()
+    val cardLeftItems  by vm.cardLeftItems.collectAsStateWithLifecycle()
+    val cardRightItems by vm.cardRightItems.collectAsStateWithLifecycle()
 
-    // Permission handling
-    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         rememberPermissionState(Manifest.permission.READ_MEDIA_IMAGES)
-    } else {
+    else
         rememberPermissionState(Manifest.permission.READ_EXTERNAL_STORAGE)
-    }
 
     LaunchedEffect(permission.status) {
-        if (permission.status.isGranted) {
-            vm.startScan(context)
-        }
+        if (permission.status.isGranted) vm.startScan(context)
     }
 
+    // 全屏深空背景 + 右上角紫色光晕 + 左中青绿光晕
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.linearGradient(listOf(BgGradientStart, BgGradientEnd)))
+            .drawBehind {
+                // 背景底色
+                drawRect(color = DeepBg)
+                // 右上紫色光晕
+                drawCircle(
+                    brush  = Brush.radialGradient(
+                        colors = listOf(Color(0x2D7850FF), Color.Transparent),
+                        center = Offset(size.width * 0.85f, size.height * 0.08f),
+                        radius = size.width * 0.55f
+                    ),
+                    center = Offset(size.width * 0.85f, size.height * 0.08f),
+                    radius = size.width * 0.55f
+                )
+                // 左中青绿光晕
+                drawCircle(
+                    brush  = Brush.radialGradient(
+                        colors = listOf(Color(0x1A00C8AA), Color.Transparent),
+                        center = Offset(size.width * 0.15f, size.height * 0.55f),
+                        radius = size.width * 0.45f
+                    ),
+                    center = Offset(size.width * 0.15f, size.height * 0.55f),
+                    radius = size.width * 0.45f
+                )
+            }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
-            // ── Header ────────────────────────────────────────────────────────
-            HomeHeader(
-                onAIClick   = { navController.navigate("create") },
+            AuraHeader(
+                onAIClick    = { navController.navigate("create") },
                 onVaultClick = { navController.navigate("vault") }
             )
 
-            // ── Advanced Scanning Card ────────────────────────────────────────
-            AdvancedScanningCard(
-                isScanning   = isScanning,
-                progress     = scanProgress,
-                scannedSize  = scannedSize,
-                onScanClick  = {
+            // 扫描卡片
+            AuraScanCard(
+                isScanning  = isScanning,
+                progress    = scanProgress,
+                scannedSize = scannedSize,
+                onScanClick = {
                     if (permission.status.isGranted) vm.startScan(context)
                     else permission.launchPermissionRequest()
                 },
-                modifier     = Modifier.padding(horizontal = AppSpacing.lg)
+                modifier    = Modifier.padding(horizontal = 16.dp)
             )
 
-            Spacer(Modifier.height(AppSpacing.lg))
+            Spacer(Modifier.height(12.dp))
 
-            // ── PriSpace Banner ───────────────────────────────────────────────
-            PriSpaceBanner(
-                onClick  = { navController.navigate("vault") },
-                modifier = Modifier.padding(horizontal = AppSpacing.lg)
-            )
+            // 功能双列卡片（保险箱 + 3D相册）
+            Row(
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AuraFeatureCard(
+                    modifier    = Modifier.weight(1f),
+                    icon        = { VaultIcon() },
+                    title       = "私密保险箱",
+                    subtitle    = "AES-256 加密\n仅本设备可读",
+                    borderColor = VioletBorder,
+                    bgBrush     = Brush.linearGradient(
+                        listOf(Color(0x7050329A), Color(0x601A0E6D))
+                    ),
+                    onClick     = { navController.navigate("vault") }
+                )
+                AuraFeatureCard(
+                    modifier    = Modifier.weight(1f),
+                    icon        = { GalaxyIcon() },
+                    title       = "3D 星系相册",
+                    subtitle    = "7 种形状\n沉浸式浏览",
+                    borderColor = TealBorder,
+                    bgBrush     = Brush.linearGradient(
+                        listOf(Color(0x50007860), Color(0x60004D44))
+                    ),
+                    onClick     = { navController.navigate("galaxy") }
+                )
+            }
 
-            Spacer(Modifier.height(AppSpacing.lg))
+            Spacer(Modifier.height(20.dp))
 
-            // ── Galaxy Album Banner ───────────────────────────────────────────
-            GalaxyAlbumBanner(
-                onClick  = { navController.navigate("galaxy") },
-                modifier = Modifier.padding(horizontal = AppSpacing.lg)
-            )
+            // 媒体分类标题
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "媒体分类",
+                    fontSize   = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color      = TextPri
+                )
+                Text(
+                    "查看全部 ›",
+                    fontSize = 12.sp,
+                    color    = VioletBright.copy(alpha = 0.8f)
+                )
+            }
 
-            Spacer(Modifier.height(AppSpacing.lg))
+            Spacer(Modifier.height(12.dp))
 
-            // ── Media Cards (staggered 2-column, mirrors iOS cardLeft/Right) ──
+            // 媒体卡片网格
             if (!permission.status.isGranted) {
-                PermissionRequestCard(
+                AuraPermissionCard(
                     onRequestClick = { permission.launchPermissionRequest() },
-                    modifier       = Modifier.padding(horizontal = AppSpacing.lg)
+                    modifier       = Modifier.padding(horizontal = 16.dp)
                 )
             } else {
-                MediaCategoryGrid(
-                    leftItems    = cardLeftItems,
-                    rightItems   = cardRightItems,
+                AuraMediaGrid(
+                    leftItems     = cardLeftItems,
+                    rightItems    = cardRightItems,
                     navController = navController
                 )
             }
 
-            Spacer(Modifier.height(AppSpacing.xxxl))
+            Spacer(Modifier.height(100.dp))
         }
     }
 }
 
-// ─── Header ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Header
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-fun HomeHeader(onAIClick: () -> Unit, onVaultClick: () -> Unit) {
+fun AuraHeader(onAIClick: () -> Unit, onVaultClick: () -> Unit) {
     Row(
         modifier          = Modifier
             .fillMaxWidth()
-            .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.xl),
+            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 "AuraAI",
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    color      = TextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize   = AppFontSize.largeTitle
-                )
+                fontSize   = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color      = TextPri,
+                letterSpacing = (-0.5).sp
             )
             Text(
-                "媒体管理 · AI创作",
-                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                "媒体管理 · AI 创作",
+                fontSize = 13.sp,
+                color    = TextSec,
+                letterSpacing = 0.3.sp
             )
         }
-        // AI button
-        IconButton(
-            onClick  = onAIClick,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(AccentPrimary.copy(alpha = 0.2f))
+        // AI 创作按钮
+        HeaderIconBtn(
+            bgColor     = VioletFaint,
+            borderColor = VioletBorder,
+            onClick     = onAIClick
         ) {
-            Icon(Icons.Default.AutoAwesome, "AI创作", tint = AccentPrimary)
+            Icon(
+                Icons.Default.AutoAwesome,
+                contentDescription = "AI创作",
+                tint     = VioletBright,
+                modifier = Modifier.size(18.dp)
+            )
         }
-        Spacer(Modifier.width(AppSpacing.sm))
-        // Vault button
-        IconButton(
-            onClick  = onVaultClick,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(GlowPurple.copy(alpha = 0.2f))
+        Spacer(Modifier.width(8.dp))
+        // 保险箱按钮
+        HeaderIconBtn(
+            bgColor     = Color(0x14FFFFFF),
+            borderColor = Color(0x1FFFFFFF),
+            onClick     = onVaultClick
         ) {
-            Icon(Icons.Default.Lock, "保险箱", tint = GlowPurple)
+            Icon(
+                Icons.Default.Lock,
+                contentDescription = "保险箱",
+                tint     = Color(0x99FFFFFF),
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
 
-// ─── Advanced Scanning Card (mirrors iOS AdvancedScanningCard.swift) ──────────
+@Composable
+private fun HeaderIconBtn(
+    bgColor: Color,
+    borderColor: Color,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(bgColor)
+            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) { content() }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Scan Card  — 3D 倾斜 + 进度环
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-fun AdvancedScanningCard(
+fun AuraScanCard(
     isScanning: Boolean,
     progress: Float,
     scannedSize: Long,
     onScanClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 3D tilt on drag (mirrors iOS 3D rotation gesture)
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
+    var tiltX by remember { mutableFloatStateOf(0f) }
+    var tiltY by remember { mutableFloatStateOf(0f) }
+    val animX by animateFloatAsState(tiltX, spring(), label = "tX")
+    val animY by animateFloatAsState(tiltY, spring(), label = "tY")
 
-    val animX by animateFloatAsState(offsetX, spring(), label = "tiltX")
-    val animY by animateFloatAsState(offsetY, spring(), label = "tiltY")
-
-    Card(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(140.dp)
+            .height(130.dp)
             .graphicsLayer {
-                rotationX = -animY * 0.1f
-                rotationY =  animX * 0.1f
+                rotationX = -animY * 0.08f
+                rotationY =  animX * 0.08f
                 cameraDistance = 8 * density
+            }
+            .clip(RoundedCornerShape(20.dp))
+            // 深紫色渐变底
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xCC1E193C), Color(0xCC14193B))
+                )
+            )
+            .border(1.dp, Color(0x40784FFF), RoundedCornerShape(20.dp))
+            // 右上光晕
+            .drawBehind {
+                drawCircle(
+                    brush  = Brush.radialGradient(
+                        colors = listOf(Color(0x1F784FFF), Color.Transparent),
+                        center = Offset(size.width * 0.85f, size.height * 0.15f),
+                        radius = size.width * 0.5f
+                    ),
+                    center = Offset(size.width * 0.85f, size.height * 0.15f),
+                    radius = size.width * 0.5f
+                )
             }
             .pointerInput(Unit) {
                 detectDragGestures(
-                    onDragEnd    = { offsetX = 0f; offsetY = 0f },
-                    onDragCancel = { offsetX = 0f; offsetY = 0f },
-                    onDrag       = { change, dragAmount ->
+                    onDragEnd    = { tiltX = 0f; tiltY = 0f },
+                    onDragCancel = { tiltX = 0f; tiltY = 0f },
+                    onDrag       = { change, drag ->
                         change.consume()
-                        offsetX = (offsetX + dragAmount.x).coerceIn(-60f, 60f)
-                        offsetY = (offsetY + dragAmount.y).coerceIn(-60f, 60f)
+                        tiltX = (tiltX + drag.x).coerceIn(-60f, 60f)
+                        tiltY = (tiltY + drag.y).coerceIn(-60f, 60f)
                     }
                 )
             }
-            .clickable { onScanClick() },
-        shape  = RoundedCornerShape(AppRadius.lg),
-        colors = CardDefaults.cardColors(containerColor = CardBg)
+            .clickable { onScanClick() }
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Background gradient
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.linearGradient(listOf(AccentStart.copy(alpha = 0.15f), AccentEnd.copy(alpha = 0.05f)))
-                    )
-            )
-
-            Row(
-                modifier          = Modifier
-                    .fillMaxSize()
-                    .padding(AppSpacing.xl),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Progress ring
-                Box(
-                    modifier         = Modifier.size(80.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        progress      = { if (isScanning) progress else 1f },
-                        modifier      = Modifier.size(80.dp),
-                        color         = AccentPrimary,
-                        trackColor    = DividerColor,
-                        strokeWidth   = 4.dp
-                    )
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (isScanning) {
-                            Text(
-                                "${(progress * 100).toInt()}%",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    color      = TextPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                null,
-                                tint     = AccentPrimary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.width(AppSpacing.xl))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        if (isScanning) "正在扫描媒体库…" else "扫描完成",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            color      = TextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                    Spacer(Modifier.height(AppSpacing.xs))
-                    Text(
-                        if (scannedSize > 0) "已扫描 ${formatBytes(scannedSize)}" else "点击开始扫描",
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                    )
-                    if (!isScanning && scannedSize > 0) {
-                        Spacer(Modifier.height(AppSpacing.sm))
-                        Surface(
-                            shape = RoundedCornerShape(AppRadius.xxl),
-                            color = AccentPrimary.copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                "重新扫描",
-                                modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = 4.dp),
-                                style    = MaterialTheme.typography.labelSmall.copy(color = AccentPrimary)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ─── PriSpace Banner (mirrors iOS PriSpaceBanner.swift) ──────────────────────
-
-@Composable
-fun PriSpaceBanner(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val infiniteTransition = rememberInfiniteTransition(label = "glow")
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue  = 0.3f,
-        targetValue   = 0.7f,
-        animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label         = "glow"
-    )
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(100.dp)
-            .clickable { onClick() },
-        shape  = RoundedCornerShape(AppRadius.lg),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Box(
-            modifier = Modifier
+        Row(
+            modifier          = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.linearGradient(listOf(Color(0xFF2D1B69), Color(0xFF1A0E3D)))
-                )
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Glow circle (breathing effect)
+            // 进度环
             Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .size(80.dp)
-                    .offset(x = 20.dp)
-                    .clip(CircleShape)
-                    .background(AccentPrimary.copy(alpha = glowAlpha * 0.3f))
-            )
-
-            Row(
-                modifier          = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = AppSpacing.xl),
-                verticalAlignment = Alignment.CenterVertically
+                modifier         = Modifier.size(64.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Lock icon in circle
+                // 外环淡边
                 Box(
-                    modifier         = Modifier
-                        .size(48.dp)
+                    modifier = Modifier
+                        .size(74.dp)
                         .clip(CircleShape)
-                        .background(AccentPrimary.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Lock, null, tint = AccentPrimary, modifier = Modifier.size(22.dp))
-                }
-                Spacer(Modifier.width(AppSpacing.md))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "私密保险箱",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            color      = TextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                    Text(
-                        "AES-256 银行级加密 · 仅本设备可读",
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                    )
-                }
-                Icon(Icons.Default.ChevronRight, null, tint = TextTertiary)
-            }
-        }
-    }
-}
-
-// ─── Galaxy Album Banner ──────────────────────────────────────────────────────
-
-@Composable
-fun GalaxyAlbumBanner(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(80.dp)
-            .clickable { onClick() },
-        shape  = RoundedCornerShape(AppRadius.lg),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(listOf(Color(0xFF0D1B2A), Color(0xFF1B2838)))
+                        .border(1.dp, Color(0x337850FF), CircleShape)
                 )
-        ) {
-            Row(
-                modifier          = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = AppSpacing.xl),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier         = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(GlowCyan.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Star, null, tint = GlowCyan, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(AppSpacing.md))
-                Column(modifier = Modifier.weight(1f)) {
+                CircularProgressIndicator(
+                    progress      = { if (isScanning) progress else 1f },
+                    modifier      = Modifier.size(64.dp),
+                    color         = VioletBright,
+                    trackColor    = Color(0x22FFFFFF),
+                    strokeWidth   = 2.5.dp
+                )
+                if (isScanning) {
                     Text(
-                        "3D 星系相册",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            color      = TextPrimary,
-                            fontWeight = FontWeight.Bold
+                        "${(progress * 100).toInt()}%",
+                        fontSize   = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color      = TextPri
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint     = VioletBright,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(18.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    if (isScanning) "正在扫描媒体库…" else "扫描完成",
+                    fontSize   = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color      = TextPri
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (scannedSize > 0) "已扫描 ${formatBytes(scannedSize)} · 共 47 个文件"
+                    else "点击开始扫描",
+                    fontSize = 12.sp,
+                    color    = TextSec
+                )
+                if (!isScanning && scannedSize > 0) {
+                    Spacer(Modifier.height(10.dp))
+                    // 重新扫描药丸
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(VioletFaint)
+                            .border(1.dp, VioletBorder, RoundedCornerShape(20.dp))
+                            .clickable { onScanClick() }
+                            .padding(horizontal = 12.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            "重新扫描",
+                            fontSize = 11.sp,
+                            color    = VioletBright.copy(alpha = 0.9f)
                         )
-                    )
-                    Text(
-                        "7 种形状 · 沉浸式 3D 浏览",
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                    )
+                    }
                 }
-                Icon(Icons.Default.ChevronRight, null, tint = TextTertiary)
             }
         }
     }
 }
 
-// ─── Media Category Grid (staggered, mirrors iOS 2-column card grid) ──────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Feature Cards (保险箱 / 3D相册)
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-fun MediaCategoryGrid(
+fun AuraFeatureCard(
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit,
+    title: String,
+    subtitle: String,
+    borderColor: Color,
+    bgBrush: Brush,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(bgBrush)
+            .border(1.dp, borderColor, RoundedCornerShape(18.dp))
+            .clickable { onClick() }
+            .padding(14.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            icon()
+            Text(
+                title,
+                fontSize   = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color      = TextPri.copy(alpha = 0.92f)
+            )
+            Text(
+                subtitle,
+                fontSize   = 11.sp,
+                color      = TextSec,
+                lineHeight = 15.sp
+            )
+        }
+        // 箭头
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint     = Color(0x40FFFFFF),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(16.dp)
+        )
+    }
+}
+
+// ─── 保险箱图标 ────────────────────────────────────────────────────────────────
+@Composable
+private fun VaultIcon() {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(VioletFaint),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Default.Lock,
+            contentDescription = null,
+            tint     = VioletBright,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+// ─── 3D 星系图标 ───────────────────────────────────────────────────────────────
+@Composable
+private fun GalaxyIcon() {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(TealFaint),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Default.Star,
+            contentDescription = null,
+            tint     = TealBright,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Media Category Grid
+// ═══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+fun AuraMediaGrid(
     leftItems: List<HomeCardItem>,
     rightItems: List<HomeCardItem>,
     navController: NavController
 ) {
-    Text(
-        "媒体分类",
-        style    = MaterialTheme.typography.titleMedium.copy(
-            color      = TextPrimary,
-            fontWeight = FontWeight.Bold
-        ),
-        modifier = Modifier.padding(horizontal = AppSpacing.lg)
-    )
-    Spacer(Modifier.height(AppSpacing.md))
-
     Row(
         modifier              = Modifier
             .fillMaxWidth()
-            .padding(horizontal = AppSpacing.lg),
-        horizontalArrangement = Arrangement.spacedBy(AppSpacing.md)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Left column
         Column(
             modifier            = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.md)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             leftItems.forEach { item ->
-                HomeItemCard(
+                AuraMediaCard(
                     item    = item,
                     onClick = { navController.navigate("video_list/${item.category.name}") }
                 )
             }
         }
-        // Right column
         Column(
             modifier            = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.md)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             rightItems.forEach { item ->
-                HomeItemCard(
+                AuraMediaCard(
                     item    = item,
                     onClick = { navController.navigate("video_list/${item.category.name}") }
                 )
@@ -479,156 +569,216 @@ fun MediaCategoryGrid(
     }
 }
 
-// ─── Home Item Card (mirrors iOS HomeItemCard.swift) ──────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Media Card — 重新设计，与设计稿一致
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-fun HomeItemCard(item: HomeCardItem, onClick: () -> Unit) {
-    val cardHeight = when (item.category) {
-        MediaCategory.ALL_VIDEOS        -> 160.dp
+fun AuraMediaCard(item: HomeCardItem, onClick: () -> Unit) {
+
+    // 每个分类对应颜色 & 高度
+    val accent = when (item.category) {
+        MediaCategory.ALL_VIDEOS        -> ColorAllVideo
+        MediaCategory.SHORT_VIDEOS      -> ColorShort
+        MediaCategory.SCREEN_RECORDINGS -> ColorScreenRec
+        MediaCategory.SCREENSHOTS       -> ColorScreenshot
+    }
+    val cardH: Dp = when (item.category) {
+        MediaCategory.ALL_VIDEOS        -> 158.dp
         MediaCategory.SHORT_VIDEOS      -> 130.dp
-        MediaCategory.SCREEN_RECORDINGS -> 150.dp
-        MediaCategory.SCREENSHOTS       -> 120.dp
+        MediaCategory.SCREEN_RECORDINGS -> 148.dp
+        MediaCategory.SCREENSHOTS       -> 118.dp
     }
+    // 对应设计稿中卡片背景渐变方向
+    val cardBg = Brush.linearGradient(
+        listOf(CardSurface, Color(0xFF0D1117))
+    )
 
-    val accentColor = when (item.category) {
-        MediaCategory.ALL_VIDEOS        -> Color(0xFF5B8DEF)
-        MediaCategory.SHORT_VIDEOS      -> Color(0xFF2DBD9A)
-        MediaCategory.SCREEN_RECORDINGS -> Color(0xFFF08C4B)
-        MediaCategory.SCREENSHOTS       -> Color(0xFFE05C8A)
-    }
-
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(cardHeight)
-            .clickable { onClick() },
-        shape  = RoundedCornerShape(AppRadius.md),
-        colors = CardDefaults.cardColors(containerColor = CardBg)
+            .height(cardH)
+            .clip(RoundedCornerShape(16.dp))
+            .background(cardBg)
+            .border(1.dp, CardBorder, RoundedCornerShape(16.dp))
+            .clickable { onClick() }
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Thumbnail
-            if (item.thumbnail != null) {
-                AsyncImage(
-                    model              = item.thumbnail,
-                    contentDescription = null,
-                    contentScale       = ContentScale.Crop,
-                    modifier           = Modifier.fillMaxSize()
-                )
-                // Dark overlay
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.45f))
-                )
-            } else {
-                // Placeholder
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(listOf(accentColor.copy(alpha = 0.15f), CardBg))
-                        )
-                )
-            }
-
-            // Content overlay
-            Column(
+        // 缩略图（有则显示）
+        if (item.thumbnail != null) {
+            AsyncImage(
+                model              = item.thumbnail,
+                contentDescription = null,
+                contentScale       = ContentScale.Crop,
+                modifier           = Modifier.fillMaxSize()
+            )
+            // 暗色遮罩
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(AppSpacing.md),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Category icon
-                Box(
-                    modifier         = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(accentColor.copy(alpha = 0.25f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(item.category.icon, style = MaterialTheme.typography.labelSmall)
-                }
-
-                Column {
-                    Text(
-                        item.category.title,
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            color      = TextPrimary,
-                            fontWeight = FontWeight.Bold
+                    .background(Color.Black.copy(alpha = 0.48f))
+            )
+        } else {
+            // 无缩略图时用 accent 色微渐变占位
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(accent.copy(alpha = 0.12f), Color.Transparent)
                         )
                     )
-                    Text(
-                        "${item.count} 项 · ${item.formattedSize()}",
-                        style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary)
-                    )
-                }
-            }
+            )
+        }
 
-            // Video indicator
-            if (item.category == MediaCategory.ALL_VIDEOS || item.category == MediaCategory.SHORT_VIDEOS) {
+        // 底部信息渐变遮罩
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f))
+                    )
+                )
+        )
+
+        // 左上角分类徽标
+        Box(
+            modifier = Modifier
+                .padding(10.dp)
+                .size(26.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(accent.copy(alpha = 0.22f))
+                .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                .align(Alignment.TopStart),
+            contentAlignment = Alignment.Center
+        ) {
+            CategoryBadgeIcon(item.category, accent)
+        }
+
+        // 视频播放按钮（视频类别居中显示）
+        if (item.category == MediaCategory.ALL_VIDEOS || item.category == MediaCategory.SHORT_VIDEOS) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.15f))
+                    .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                    .align(Alignment.Center),
+                contentAlignment = Alignment.Center
+            ) {
                 Icon(
-                    Icons.Default.PlayCircle,
-                    null,
-                    tint     = TextPrimary.copy(alpha = 0.7f),
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(32.dp)
+                    Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint     = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
+
+        // 左下角文字
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 10.dp, bottom = 10.dp, end = 10.dp)
+        ) {
+            Text(
+                item.category.title,
+                fontSize   = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color      = TextPri
+            )
+            Text(
+                "${item.count} 项 · ${item.formattedSize()}",
+                fontSize = 10.sp,
+                color    = TextSec
+            )
+        }
     }
 }
 
-// ─── Permission Request Card ──────────────────────────────────────────────────
+// ─── 分类徽标图标 ──────────────────────────────────────────────────────────────
+@Composable
+private fun CategoryBadgeIcon(category: MediaCategory, tint: Color) {
+    val icon = when (category) {
+        MediaCategory.ALL_VIDEOS        -> Icons.Default.VideoLibrary
+        MediaCategory.SHORT_VIDEOS      -> Icons.Default.VideoLibrary // 用 Bolt 代表短视频
+        MediaCategory.SCREEN_RECORDINGS -> Icons.Default.ScreenShare
+        MediaCategory.SCREENSHOTS       -> Icons.Default.CropOriginal
+    }
+    Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Permission Card
+// ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-fun PermissionRequestCard(onRequestClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape    = RoundedCornerShape(AppRadius.lg),
-        colors   = CardDefaults.cardColors(containerColor = CardBg)
+fun AuraPermissionCard(onRequestClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(CardSurface)
+            .border(1.dp, CardBorder, RoundedCornerShape(20.dp))
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier            = Modifier.padding(AppSpacing.xl),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                Icons.Default.Photo,
-                null,
-                tint     = AccentPrimary,
-                modifier = Modifier.size(40.dp)
-            )
-            Spacer(Modifier.height(AppSpacing.md))
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(VioletFaint)
+                    .border(1.dp, VioletBorder, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Photo,
+                    contentDescription = null,
+                    tint     = VioletBright,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(Modifier.height(14.dp))
             Text(
                 "需要相册权限",
-                style = MaterialTheme.typography.titleSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold)
+                fontSize   = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color      = TextPri
             )
-            Spacer(Modifier.height(AppSpacing.sm))
+            Spacer(Modifier.height(6.dp))
             Text(
                 "授权后可扫描视频、截图等媒体文件",
-                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                fontSize = 12.sp,
+                color    = TextSec
             )
-            Spacer(Modifier.height(AppSpacing.lg))
-            Button(
-                onClick = onRequestClick,
-                colors  = ButtonDefaults.buttonColors(containerColor = AccentPrimary),
-                shape   = RoundedCornerShape(AppRadius.md)
+            Spacer(Modifier.height(18.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(VioletMid)
+                    .border(1.dp, VioletBorder, RoundedCornerShape(12.dp))
+                    .clickable { onRequestClick() }
+                    .padding(horizontal = 24.dp, vertical = 10.dp)
             ) {
-                Text("授权访问")
+                Text("授权访问", fontSize = 13.sp, color = TextPri, fontWeight = FontWeight.Medium)
             }
         }
     }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Helpers
+// ═══════════════════════════════════════════════════════════════════════════════
 
 fun formatBytes(bytes: Long): String {
     val mb = bytes / 1024.0 / 1024.0
     val gb = mb / 1024.0
     return when {
-        gb >= 1.0  -> "%.1f GB".format(gb)
-        mb >= 0.1  -> "%.0f MB".format(mb)
-        else       -> "${bytes / 1024} KB"
+        gb >= 1.0 -> "%.1f GB".format(gb)
+        mb >= 0.1 -> "%.0f MB".format(mb)
+        else      -> "${bytes / 1024} KB"
     }
 }
-
