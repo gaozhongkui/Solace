@@ -19,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -27,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,6 +39,17 @@ import com.getsolace.ai.chat.data.VaultStore
 import com.getsolace.ai.chat.ui.screens.ai.RunMateToast
 import com.getsolace.ai.chat.ui.theme.*
 import com.getsolace.ai.chat.viewmodel.VaultViewModel
+
+// ─── Local design tokens ──────────────────────────────────────────────────────
+
+private val DeepBg       = Color(0xFF0A0B14)
+private val CardSurface  = Color(0xFF131722)
+private val CardBorder   = Color(0x0FFFFFFF)
+private val VioletBright = Color(0xFF9B7AFF)
+private val VioletFaint  = Color(0x1E9B7AFF)
+private val VioletMid    = Color(0x409B7AFF)
+private val TextPri      = Color(0xFFFFFFFF)
+private val TextSec      = Color(0x73FFFFFF)
 
 // ─── Vault Screen ─────────────────────────────────────────────────────────────
 
@@ -47,10 +61,8 @@ fun VaultScreen(vm: VaultViewModel = viewModel()) {
     val toastMessage    by vm.toastMessage.collectAsStateWithLifecycle()
     val decryptedBitmap by vm.decryptedBitmap.collectAsStateWithLifecycle()
 
-    // Init store
     LaunchedEffect(Unit) { VaultStore.init(context) }
 
-    // Toast auto-dismiss
     LaunchedEffect(toastMessage) {
         if (toastMessage != null) {
             kotlinx.coroutines.delay(2000)
@@ -58,7 +70,6 @@ fun VaultScreen(vm: VaultViewModel = viewModel()) {
         }
     }
 
-    // Image picker
     val pickImage = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -71,7 +82,19 @@ fun VaultScreen(vm: VaultViewModel = viewModel()) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.linearGradient(listOf(BgGradientStart, BgGradientEnd)))
+            .drawBehind {
+                drawRect(color = DeepBg)
+                // Top-left violet glow
+                drawCircle(
+                    brush  = Brush.radialGradient(
+                        colors = listOf(Color(0x207850FF), Color.Transparent),
+                        center = Offset(size.width * 0.1f, size.height * 0.05f),
+                        radius = size.width * 0.55f
+                    ),
+                    center = Offset(size.width * 0.1f, size.height * 0.05f),
+                    radius = size.width * 0.55f
+                )
+            }
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
@@ -79,37 +102,51 @@ fun VaultScreen(vm: VaultViewModel = viewModel()) {
             Row(
                 modifier          = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.xl),
+                    .statusBarsPadding()
+                    .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "私密保险箱",
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            color      = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize   = AppFontSize.largeTitle
-                        )
+                        fontSize   = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color      = TextPri,
+                        letterSpacing = (-0.5).sp
                     )
                     Text(
                         "AES-256 加密保护",
-                        style = MaterialTheme.typography.bodySmall.copy(color = AccentPrimary)
+                        fontSize = 13.sp,
+                        color    = VioletBright.copy(alpha = 0.8f),
+                        letterSpacing = 0.3.sp
                     )
                 }
-                IconButton(
-                    onClick  = { pickImage.launch("image/*") },
+                // Add button
+                Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(AccentPrimary.copy(alpha = 0.15f))
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(VioletBright.copy(alpha = 0.3f), VioletBright.copy(alpha = 0.15f))
+                            )
+                        )
+                        .border(1.dp, VioletBright.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                        .clickable { pickImage.launch("image/*") },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Add, "添加", tint = AccentPrimary)
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "添加",
+                        tint     = VioletBright,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
 
             // ── Info card ─────────────────────────────────────────────────────
-            VaultInfoCard(modifier = Modifier.padding(horizontal = AppSpacing.lg))
-            Spacer(Modifier.height(AppSpacing.lg))
+            VaultInfoCard(modifier = Modifier.padding(horizontal = 16.dp))
+            Spacer(Modifier.height(16.dp))
 
             // ── Content ───────────────────────────────────────────────────────
             if (images.isEmpty()) {
@@ -120,9 +157,9 @@ fun VaultScreen(vm: VaultViewModel = viewModel()) {
             } else {
                 LazyVerticalGrid(
                     columns               = GridCells.Fixed(2),
-                    contentPadding        = PaddingValues(AppSpacing.lg),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.md),
-                    verticalArrangement   = Arrangement.spacedBy(AppSpacing.md),
+                    contentPadding        = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement   = Arrangement.spacedBy(12.dp),
                     modifier              = Modifier.weight(1f)
                 ) {
                     items(images, key = { it.id }) { image ->
@@ -141,10 +178,10 @@ fun VaultScreen(vm: VaultViewModel = viewModel()) {
             Box(
                 modifier         = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f)),
+                    .background(Color.Black.copy(alpha = 0.55f)),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = AccentPrimary)
+                CircularProgressIndicator(color = VioletBright, strokeWidth = 2.5.dp)
             }
         }
 
@@ -176,38 +213,75 @@ fun VaultScreen(vm: VaultViewModel = viewModel()) {
 
 @Composable
 fun VaultInfoCard(modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape    = RoundedCornerShape(AppRadius.md),
-        colors   = CardDefaults.cardColors(containerColor = CardBg)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF1A1530), Color(0xFF111827))
+                )
+            )
+            .border(1.dp, VioletBright.copy(alpha = 0.18f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier          = Modifier.padding(AppSpacing.lg),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        // Shield icon with glow
+        Box(contentAlignment = Alignment.Center) {
             Box(
-                modifier         = Modifier
-                    .size(44.dp)
+                modifier = Modifier
+                    .size(52.dp)
                     .clip(CircleShape)
-                    .background(AccentPrimary.copy(alpha = 0.15f)),
+                    .background(
+                        Brush.radialGradient(
+                            listOf(VioletBright.copy(alpha = 0.25f), Color.Transparent)
+                        )
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(VioletFaint)
+                    .border(1.dp, VioletMid, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Lock, null, tint = AccentPrimary, modifier = Modifier.size(22.dp))
+                Icon(Icons.Default.Shield, null, tint = VioletBright, modifier = Modifier.size(22.dp))
             }
-            Spacer(Modifier.width(AppSpacing.md))
-            Column {
-                Text(
-                    "银行级加密保护",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        color      = TextPrimary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                )
-                Text(
-                    "图片使用 AES-256-GCM 加密存储，仅在本设备解密",
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                )
-            }
+        }
+
+        Spacer(Modifier.width(14.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "银行级加密保护",
+                fontSize   = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color      = TextPri
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                "AES-256-GCM 加密 · 仅本设备可解密",
+                fontSize = 12.sp,
+                color    = TextSec
+            )
+        }
+
+        // Checkmark
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF34C759).copy(alpha = 0.15f))
+                .border(1.dp, Color(0xFF34C759).copy(alpha = 0.4f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Check,
+                null,
+                tint     = Color(0xFF34C759),
+                modifier = Modifier.size(13.dp)
+            )
         }
     }
 }
@@ -217,50 +291,76 @@ fun VaultInfoCard(modifier: Modifier = Modifier) {
 @Composable
 fun VaultEmptyState(modifier: Modifier = Modifier, onAddClick: () -> Unit) {
     Column(
-        modifier            = modifier
-            .fillMaxWidth()
-            .padding(AppSpacing.xxxl),
+        modifier            = modifier.fillMaxWidth().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(
-            modifier         = Modifier
-                .size(100.dp)
-                .clip(CircleShape)
-                .background(AccentPrimary.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Default.Lock,
-                null,
-                tint     = AccentPrimary.copy(alpha = 0.6f),
-                modifier = Modifier.size(48.dp)
+        // Glowing icon stack
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(110.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(VioletBright.copy(alpha = 0.18f), Color.Transparent)
+                        )
+                    )
             )
+            Box(
+                modifier = Modifier
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF1A1530), Color(0xFF111827))
+                        )
+                    )
+                    .border(1.dp, VioletBright.copy(alpha = 0.3f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.LockOpen,
+                    null,
+                    tint     = VioletBright.copy(alpha = 0.7f),
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
-        Spacer(Modifier.height(AppSpacing.xl))
+        Spacer(Modifier.height(20.dp))
         Text(
             "保险箱是空的",
-            style     = MaterialTheme.typography.titleMedium.copy(
-                color      = TextPrimary,
-                fontWeight = FontWeight.Bold
-            ),
-            textAlign = TextAlign.Center
+            fontSize   = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color      = TextPri,
+            textAlign  = TextAlign.Center
         )
-        Spacer(Modifier.height(AppSpacing.sm))
+        Spacer(Modifier.height(8.dp))
         Text(
-            "添加需要保护的隐私照片，使用 AES-256 加密存储",
-            style     = MaterialTheme.typography.bodySmall.copy(color = TextSecondary),
+            "添加隐私照片，使用 AES-256 加密保护",
+            fontSize  = 13.sp,
+            color     = TextSec,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(AppSpacing.xxl))
-        Button(
-            onClick = onAddClick,
-            shape   = RoundedCornerShape(AppRadius.md),
-            colors  = ButtonDefaults.buttonColors(containerColor = AccentPrimary)
+        Spacer(Modifier.height(28.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    Brush.linearGradient(
+                        listOf(VioletBright.copy(alpha = 0.8f), Color(0xFF6A4FCC).copy(alpha = 0.8f))
+                    )
+                )
+                .clickable { onAddClick() }
+                .padding(horizontal = 28.dp, vertical = 12.dp)
         ) {
-            Icon(Icons.Default.Add, null)
-            Spacer(Modifier.width(AppSpacing.sm))
-            Text("选择照片加密")
+            Row(
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Text("选择照片加密", fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
+            }
         }
     }
 }
@@ -276,61 +376,104 @@ fun EncryptedImageCard(
     val thumbnailBitmap = remember(image.id) { VaultStore.thumbnailBitmap(image) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f),
-        shape  = RoundedCornerShape(AppRadius.md),
-        colors = CardDefaults.cardColors(containerColor = CardBg)
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardSurface)
+            .border(1.dp, CardBorder, RoundedCornerShape(16.dp))
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (thumbnailBitmap != null) {
-                Image(
-                    bitmap             = thumbnailBitmap.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale       = ContentScale.Crop,
-                    modifier           = Modifier
-                        .fillMaxSize()
-                        .blur(8.dp)
-                )
-            } else {
-                Box(
-                    modifier         = Modifier
-                        .fillMaxSize()
-                        .background(CardBgAlt),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Photo, null, tint = TextTertiary, modifier = Modifier.size(32.dp))
-                }
-            }
+        // Blurred thumbnail or placeholder
+        if (thumbnailBitmap != null) {
+            Image(
+                bitmap             = thumbnailBitmap.asImageBitmap(),
+                contentDescription = null,
+                contentScale       = ContentScale.Crop,
+                modifier           = Modifier.fillMaxSize().blur(10.dp)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF1A1530), Color(0xFF111827))
+                        )
+                    )
+            )
+        }
 
-            // Dark overlay
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
+        // Dark scrim
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.45f))
+        )
 
-            // Lock icon
+        // Lock icon center
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.4f))
+                .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                .align(Alignment.Center),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(
                 Icons.Default.Lock,
                 null,
-                tint     = TextPrimary,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(28.dp)
+                tint     = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(20.dp)
             )
+        }
 
-            // Action buttons
-            Row(
+        // Bottom action strip
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
+                    )
+                )
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            // View
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .padding(AppSpacing.xs),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White.copy(alpha = 0.12f))
+                    .clickable { onView() }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
             ) {
-                IconButton(onClick = onView, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Visibility, "查看", tint = TextPrimary, modifier = Modifier.size(18.dp))
+                Row(
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(Icons.Default.Visibility, null, tint = Color.White, modifier = Modifier.size(13.dp))
+                    Text("查看", fontSize = 11.sp, color = Color.White)
                 }
-                IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Delete, "删除", tint = ErrorRed, modifier = Modifier.size(18.dp))
+            }
+            // Delete
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFFFF3B30).copy(alpha = 0.15f))
+                    .clickable { showDeleteConfirm = true }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(Icons.Default.Delete, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(13.dp))
+                    Text("删除", fontSize = 11.sp, color = Color(0xFFFF3B30))
                 }
             }
         }
@@ -339,20 +482,20 @@ fun EncryptedImageCard(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title            = { Text("删除图片", color = TextPrimary) },
-            text             = { Text("确定要永久删除这张加密照片吗？", color = TextSecondary) },
+            title            = { Text("删除图片", color = TextPri) },
+            text             = { Text("确定要永久删除这张加密照片吗？", color = TextSec) },
             confirmButton    = {
                 TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
-                    Text("删除", color = ErrorRed)
+                    Text("删除", color = Color(0xFFFF3B30))
                 }
             },
             dismissButton    = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("取消", color = TextSecondary)
+                    Text("取消", color = TextSec)
                 }
             },
-            containerColor   = CardBgAlt,
-            shape            = RoundedCornerShape(AppRadius.lg)
+            containerColor   = Color(0xFF1C2135),
+            shape            = RoundedCornerShape(20.dp)
         )
     }
 }
@@ -368,7 +511,7 @@ fun DecryptedImageViewer(bitmap: Bitmap, onDismiss: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.95f))
+                .background(Color.Black.copy(alpha = 0.97f))
                 .clickable { onDismiss() }
         ) {
             Image(
@@ -383,10 +526,11 @@ fun DecryptedImageViewer(bitmap: Bitmap, onDismiss: () -> Unit) {
                 onClick  = onDismiss,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(AppSpacing.lg)
+                    .padding(16.dp)
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .background(Color.White.copy(alpha = 0.12f))
+                    .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
             ) {
                 Icon(Icons.Default.Close, "关闭", tint = Color.White)
             }

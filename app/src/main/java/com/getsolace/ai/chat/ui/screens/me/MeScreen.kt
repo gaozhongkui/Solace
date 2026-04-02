@@ -1,7 +1,5 @@
 package com.getsolace.ai.chat.ui.screens.me
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -16,12 +14,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.getsolace.ai.chat.data.AIGeneratedImage
@@ -31,84 +32,144 @@ import com.getsolace.ai.chat.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
+// ─── Local design tokens ──────────────────────────────────────────────────────
+
+private val DeepBg        = Color(0xFF0A0B14)
+private val CardSurface   = Color(0xFF131722)
+private val CardBorder    = Color(0x0FFFFFFF)
+private val VioletBright  = Color(0xFF9B7AFF)
+private val VioletFaint   = Color(0x1E9B7AFF)
+private val VioletMid     = Color(0x409B7AFF)
+private val TealBright    = Color(0xFF00D4B4)
+private val TealFaint     = Color(0x1A00D4B4)
+private val TextPri       = Color(0xFFFFFFFF)
+private val TextSec       = Color(0x73FFFFFF)
+private val TextTer       = Color(0x40FFFFFF)
+
 // ─── Me Screen ────────────────────────────────────────────────────────────────
 
 @Composable
 fun MeScreen() {
     val history by AIImageStore.images.collectAsStateWithLifecycle()
 
-    var selectedImage    by remember { mutableStateOf<AIGeneratedImage?>(null) }
-    var showSettings     by remember { mutableStateOf(false) }
+    var selectedImage by remember { mutableStateOf<AIGeneratedImage?>(null) }
+    var showSettings  by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.linearGradient(listOf(BgGradientStart, BgGradientEnd)))
+            .drawBehind {
+                drawRect(color = DeepBg)
+                // top-right violet glow
+                drawCircle(
+                    brush  = Brush.radialGradient(
+                        colors = listOf(Color(0x207850FF), Color.Transparent),
+                        center = Offset(size.width * 0.9f, 0f),
+                        radius = size.width * 0.6f
+                    ),
+                    center = Offset(size.width * 0.9f, 0f),
+                    radius = size.width * 0.6f
+                )
+                // bottom-left teal glow
+                drawCircle(
+                    brush  = Brush.radialGradient(
+                        colors = listOf(Color(0x1400C8AA), Color.Transparent),
+                        center = Offset(0f, size.height * 0.85f),
+                        radius = size.width * 0.5f
+                    ),
+                    center = Offset(0f, size.height * 0.85f),
+                    radius = size.width * 0.5f
+                )
+            }
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
             // ── Header ────────────────────────────────────────────────────────
             Row(
-                modifier          = Modifier
+                modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.xl),
+                    .statusBarsPadding()
+                    .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "我的",
-                    style    = MaterialTheme.typography.headlineLarge.copy(
-                        color      = TextPrimary,
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "我的",
+                        fontSize   = 28.sp,
                         fontWeight = FontWeight.Bold,
-                        fontSize   = AppFontSize.largeTitle
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(
-                    onClick  = { showSettings = true },
+                        color      = TextPri,
+                        letterSpacing = (-0.5).sp
+                    )
+                    Text(
+                        "创作中心",
+                        fontSize = 13.sp,
+                        color    = TextSec,
+                        letterSpacing = 0.3.sp
+                    )
+                }
+                // Settings button
+                Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(SurfaceOverlay)
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x14FFFFFF))
+                        .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(12.dp))
+                        .clickable { showSettings = true },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Settings, "设置", tint = TextSecondary)
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = "设置",
+                        tint     = Color(0x99FFFFFF),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 
             // ── Profile hero card ──────────────────────────────────────────────
             ProfileHeroCard(
                 imageCount = history.size,
-                modifier   = Modifier.padding(horizontal = AppSpacing.lg)
+                modifier   = Modifier.padding(horizontal = 16.dp)
             )
 
-            Spacer(Modifier.height(AppSpacing.xl))
+            Spacer(Modifier.height(20.dp))
 
             // ── Section title ──────────────────────────────────────────────────
             Row(
-                modifier = Modifier.padding(horizontal = AppSpacing.lg),
+                modifier          = Modifier.padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Default.AutoAwesome,
-                    contentDescription = null,
-                    tint               = AccentPrimary,
-                    modifier           = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(AppSpacing.sm))
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(VioletFaint)
+                        .border(1.dp, VioletMid, RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint     = VioletBright,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
                 Text(
                     "我的创作",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        color      = TextPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
+                    fontSize   = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color      = TextPri
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
                     "${history.size} 件作品",
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextTertiary)
+                    fontSize = 12.sp,
+                    color    = VioletBright.copy(alpha = 0.7f)
                 )
             }
 
-            Spacer(Modifier.height(AppSpacing.md))
+            Spacer(Modifier.height(12.dp))
 
             // ── Creations grid ────────────────────────────────────────────────
             if (history.isEmpty()) {
@@ -116,9 +177,9 @@ fun MeScreen() {
             } else {
                 LazyVerticalGrid(
                     columns               = GridCells.Fixed(3),
-                    contentPadding        = PaddingValues(AppSpacing.lg),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
-                    verticalArrangement   = Arrangement.spacedBy(AppSpacing.sm),
+                    contentPadding        = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement   = Arrangement.spacedBy(8.dp),
                     modifier              = Modifier.weight(1f)
                 ) {
                     items(history, key = { it.id }) { img ->
@@ -154,91 +215,175 @@ fun MeScreen() {
 
 @Composable
 fun ProfileHeroCard(imageCount: Int, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape    = RoundedCornerShape(AppRadius.lg),
-        colors   = CardDefaults.cardColors(containerColor = CardBg)
-    ) {
-        Row(
-            modifier          = Modifier.padding(AppSpacing.xl),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Avatar
-            Box(
-                modifier         = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(listOf(AccentStart, AccentEnd))
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF1A1530), Color(0xFF111827))
+                )
+            )
+            .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(20.dp))
+            .drawBehind {
+                // violet glow top-right inside card
+                drawCircle(
+                    brush  = Brush.radialGradient(
+                        colors = listOf(Color(0x259B7AFF), Color.Transparent),
+                        center = Offset(size.width * 0.9f, 0f),
+                        radius = size.width * 0.5f
                     ),
-                contentAlignment = Alignment.Center
+                    center = Offset(size.width * 0.9f, 0f),
+                    radius = size.width * 0.5f
+                )
+            }
+    ) {
+        Column {
+            // Avatar + info row
+            Row(
+                modifier          = Modifier.padding(start = 18.dp, end = 18.dp, top = 20.dp, bottom = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    tint               = TextPrimary,
-                    modifier           = Modifier.size(36.dp)
-                )
-            }
-
-            Spacer(Modifier.width(AppSpacing.lg))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "创作者",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        color      = TextPrimary,
-                        fontWeight = FontWeight.Bold
+                // Avatar with glow ring
+                Box(contentAlignment = Alignment.Center) {
+                    // Outer glow ring
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(VioletBright.copy(alpha = 0.3f), Color.Transparent)
+                                )
+                            )
                     )
+                    // Avatar circle
+                    Box(
+                        modifier = Modifier
+                            .size(68.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(Color(0xFF9B7AFF), Color(0xFF6A4FCC))
+                                )
+                            )
+                            .border(2.dp, VioletBright.copy(alpha = 0.5f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            tint     = Color.White,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "创作者",
+                        fontSize   = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color      = TextPri
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    // Tag badges
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        TagBadge("AI艺术", VioletBright)
+                        TagBadge("创作者", TealBright)
+                    }
+                }
+            }
+
+            // Divider
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Color(0x14FFFFFF))
+            )
+
+            // Stats row
+            Row(
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 14.dp, horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                StatCard(
+                    value = "$imageCount",
+                    label = "AI创作",
+                    accentColor = VioletBright
                 )
-                Spacer(Modifier.height(AppSpacing.xs))
-                Text(
-                    "AI艺术爱好者",
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(36.dp)
+                        .background(Color(0x14FFFFFF))
+                )
+                StatCard(
+                    value = "5",
+                    label = "探索风格",
+                    accentColor = TealBright
+                )
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(36.dp)
+                        .background(Color(0x14FFFFFF))
+                )
+                StatCard(
+                    value = "安全",
+                    label = "保险箱",
+                    accentColor = Color(0xFF34C759)
                 )
             }
-        }
-
-        HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = AppSpacing.xl))
-
-        // Stats row
-        Row(
-            modifier              = Modifier
-                .fillMaxWidth()
-                .padding(AppSpacing.lg),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            StatItem(label = "AI创作", value = "$imageCount")
-            VerticalDivider(
-                modifier  = Modifier.height(32.dp),
-                color     = DividerColor,
-                thickness = 1.dp
-            )
-            StatItem(label = "风格探索", value = "5")
-            VerticalDivider(
-                modifier  = Modifier.height(32.dp),
-                color     = DividerColor,
-                thickness = 1.dp
-            )
-            StatItem(label = "保险箱", value = "安全")
         }
     }
 }
 
 @Composable
-fun StatItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun TagBadge(label: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(color.copy(alpha = 0.15f))
+            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Text(label, fontSize = 11.sp, color = color, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun StatCard(value: String, label: String, accentColor: Color) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier            = Modifier.padding(horizontal = 8.dp)
+    ) {
         Text(
             value,
-            style = MaterialTheme.typography.titleMedium.copy(
-                color      = TextPrimary,
-                fontWeight = FontWeight.Bold
-            )
+            fontSize   = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color      = accentColor
         )
+        Spacer(Modifier.height(2.dp))
         Text(
             label,
-            style = MaterialTheme.typography.labelSmall.copy(color = TextTertiary)
+            fontSize = 11.sp,
+            color    = TextSec
         )
+    }
+}
+
+// Keep old StatItem for compatibility (unused now but avoid removing it abruptly)
+@Composable
+fun StatItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPri)
+        Text(label, fontSize = 11.sp, color = TextTer)
     }
 }
 
@@ -250,8 +395,9 @@ fun AIHistoryCard(image: AIGeneratedImage, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(AppRadius.sm))
-            .background(CardBg)
+            .clip(RoundedCornerShape(12.dp))
+            .background(CardSurface)
+            .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
     ) {
         if (image.imageUrl.isNotBlank()) {
@@ -263,15 +409,14 @@ fun AIHistoryCard(image: AIGeneratedImage, onClick: () -> Unit) {
             )
         } else {
             Box(
-                modifier         = Modifier
-                    .fillMaxSize()
-                    .background(CardBgAlt),
+                modifier         = Modifier.fillMaxSize().background(Color(0xFF1C2135)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint               = TextTertiary
+                    tint     = Color(0x40FFFFFF),
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
@@ -279,21 +424,12 @@ fun AIHistoryCard(image: AIGeneratedImage, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(AppSpacing.xs)
+                .padding(5.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(VioletBright.copy(alpha = 0.88f))
+                .padding(horizontal = 5.dp, vertical = 2.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = AccentPrimary.copy(alpha = 0.85f)
-            ) {
-                Text(
-                    image.styleTitle,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                    style    = MaterialTheme.typography.labelSmall.copy(
-                        color    = TextPrimary,
-                        fontSize = AppFontSize.caption2
-                    )
-                )
-            }
+            Text(image.styleTitle, fontSize = 9.sp, color = Color.White, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -305,16 +441,47 @@ fun CreationsEmptyState(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            Icons.Default.AutoAwesome,
-            contentDescription = null,
-            tint               = TextTertiary,
-            modifier           = Modifier.size(48.dp)
-        )
-        Spacer(Modifier.height(AppSpacing.md))
+        // Glowing icon container
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(90.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(VioletBright.copy(alpha = 0.2f), Color.Transparent)
+                        )
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(VioletFaint)
+                    .border(1.dp, VioletMid, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint     = VioletBright,
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
         Text(
             "还没有创作记录",
-            style     = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary),
+            fontSize   = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color      = TextPri,
+            textAlign  = TextAlign.Center
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "去「创作」Tab 生成你的第一张 AI 画作",
+            fontSize  = 12.sp,
+            color     = TextSec,
             textAlign = TextAlign.Center
         )
     }
@@ -336,7 +503,7 @@ fun AIImageDetailOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.92f))
+            .background(Color.Black.copy(alpha = 0.95f))
     ) {
         Column(
             modifier = Modifier
@@ -347,23 +514,22 @@ fun AIImageDetailOverlay(
             Row(
                 modifier          = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.md, vertical = AppSpacing.lg),
+                    .padding(horizontal = 12.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, "关闭", tint = TextPrimary)
+                    Icon(Icons.Default.Close, "关闭", tint = TextPri)
                 }
                 Text(
                     "作品详情",
-                    style    = MaterialTheme.typography.titleMedium.copy(
-                        color      = TextPrimary,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center
+                    fontSize      = 16.sp,
+                    fontWeight    = FontWeight.Bold,
+                    color         = TextPri,
+                    modifier      = Modifier.weight(1f),
+                    textAlign     = TextAlign.Center
                 )
                 IconButton(onClick = { showDeleteConfirm = true }) {
-                    Icon(Icons.Default.Delete, "删除", tint = ErrorRed)
+                    Icon(Icons.Default.Delete, "删除", tint = Color(0xFFFF3B30))
                 }
             }
 
@@ -372,9 +538,9 @@ fun AIImageDetailOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .padding(horizontal = AppSpacing.lg)
-                    .clip(RoundedCornerShape(AppRadius.lg))
-                    .background(CardBg)
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(CardSurface)
             ) {
                 if (image.imageUrl.isNotBlank()) {
                     AsyncImage(
@@ -386,52 +552,54 @@ fun AIImageDetailOverlay(
                 }
             }
 
-            Spacer(Modifier.height(AppSpacing.xl))
+            Spacer(Modifier.height(20.dp))
 
-            // Info
-            Card(
+            // Info card
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.lg),
-                shape  = RoundedCornerShape(AppRadius.md),
-                colors = CardDefaults.cardColors(containerColor = CardBg)
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(CardSurface)
+                    .border(1.dp, CardBorder, RoundedCornerShape(16.dp))
+                    .padding(16.dp)
             ) {
-                Column(modifier = Modifier.padding(AppSpacing.lg)) {
+                Column {
                     InfoRow(label = "风格", value = image.styleTitle)
-                    Spacer(Modifier.height(AppSpacing.sm))
+                    Spacer(Modifier.height(8.dp))
                     InfoRow(label = "比例", value = image.aspectRatio)
-                    Spacer(Modifier.height(AppSpacing.sm))
+                    Spacer(Modifier.height(8.dp))
                     InfoRow(label = "创作时间", value = dateStr)
                     if (image.prompt.isNotBlank()) {
-                        Spacer(Modifier.height(AppSpacing.md))
-                        HorizontalDivider(color = DividerColor)
-                        Spacer(Modifier.height(AppSpacing.md))
-                        Text("提示词", style = MaterialTheme.typography.labelMedium.copy(color = AccentPrimary))
-                        Spacer(Modifier.height(AppSpacing.xs))
-                        Text(image.prompt, style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary))
+                        Spacer(Modifier.height(12.dp))
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
+                        Spacer(Modifier.height(12.dp))
+                        Text("提示词", fontSize = 12.sp, color = VioletBright, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(6.dp))
+                        Text(image.prompt, fontSize = 13.sp, color = TextPri)
                     }
                 }
             }
-            Spacer(Modifier.height(AppSpacing.xxxl))
+            Spacer(Modifier.height(40.dp))
         }
 
         if (showDeleteConfirm) {
             AlertDialog(
                 onDismissRequest = { showDeleteConfirm = false },
-                title            = { Text("删除作品", color = TextPrimary) },
-                text             = { Text("确定要删除这件作品吗？", color = TextSecondary) },
+                title            = { Text("删除作品", color = TextPri) },
+                text             = { Text("确定要删除这件作品吗？", color = TextSec) },
                 confirmButton    = {
                     TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
-                        Text("删除", color = ErrorRed)
+                        Text("删除", color = Color(0xFFFF3B30))
                     }
                 },
                 dismissButton    = {
                     TextButton(onClick = { showDeleteConfirm = false }) {
-                        Text("取消", color = TextSecondary)
+                        Text("取消", color = TextSec)
                     }
                 },
-                containerColor   = CardBgAlt,
-                shape            = RoundedCornerShape(AppRadius.lg)
+                containerColor   = Color(0xFF1C2135),
+                shape            = RoundedCornerShape(20.dp)
             )
         }
     }
@@ -440,12 +608,8 @@ fun AIImageDetailOverlay(
 @Composable
 fun InfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            label,
-            style    = MaterialTheme.typography.bodySmall.copy(color = TextTertiary),
-            modifier = Modifier.width(80.dp)
-        )
-        Text(value, style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary))
+        Text(label, fontSize = 13.sp, color = TextSec, modifier = Modifier.width(80.dp))
+        Text(value, fontSize = 13.sp, color = TextPri)
     }
 }
 
@@ -459,68 +623,52 @@ fun SettingsSheet(onDismiss: () -> Unit) {
             .background(Color.Black.copy(alpha = 0.6f))
             .clickable { onDismiss() }
     ) {
-        Card(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.75f)
+                .fillMaxHeight(0.72f)
                 .align(Alignment.BottomCenter)
-                .clickable { /* absorb */ },
-            shape  = RoundedCornerShape(topStart = AppRadius.xl, topEnd = AppRadius.xl),
-            colors = CardDefaults.cardColors(containerColor = BgDeepAlt)
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(Color(0xFF111827))
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(Color(0x33FFFFFF), Color.Transparent)
+                    ),
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                )
+                .clickable { /* absorb */ }
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(AppSpacing.xl)
+                    .padding(24.dp)
                     .verticalScroll(rememberScrollState())
             ) {
                 // Handle bar
                 Box(
                     modifier = Modifier
-                        .width(40.dp)
+                        .width(36.dp)
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(TextTertiary)
+                        .background(Color(0x40FFFFFF))
                         .align(Alignment.CenterHorizontally)
                 )
-                Spacer(Modifier.height(AppSpacing.xl))
+                Spacer(Modifier.height(20.dp))
 
                 Text(
                     "设置",
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        color      = TextPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
+                    fontSize   = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color      = TextPri
                 )
-                Spacer(Modifier.height(AppSpacing.xl))
+                Spacer(Modifier.height(20.dp))
 
-                // Settings items
-                SettingsItem(
-                    icon    = Icons.Default.Feedback,
-                    title   = "意见反馈",
-                    onClick = { }
-                )
-                SettingsItem(
-                    icon    = Icons.Default.PrivacyTip,
-                    title   = "隐私政策",
-                    onClick = { }
-                )
-                SettingsItem(
-                    icon    = Icons.Default.Description,
-                    title   = "服务条款",
-                    onClick = { }
-                )
-                SettingsItem(
-                    icon    = Icons.Default.Star,
-                    title   = "给应用评分",
-                    onClick = { }
-                )
-                SettingsItem(
-                    icon    = Icons.Default.Info,
-                    title   = "关于 AuraAI",
-                    subtitle = "版本 1.0",
-                    onClick  = { }
-                )
+                SettingsItem(icon = Icons.Default.Feedback,   title = "意见反馈",      onClick = { })
+                SettingsItem(icon = Icons.Default.PrivacyTip, title = "隐私政策",      onClick = { })
+                SettingsItem(icon = Icons.Default.Description,title = "服务条款",      onClick = { })
+                SettingsItem(icon = Icons.Default.Star,       title = "给应用评分",    onClick = { })
+                SettingsItem(icon = Icons.Default.Info,       title = "关于 AuraAI",   subtitle = "版本 1.0", onClick = { })
             }
         }
     }
@@ -536,34 +684,34 @@ fun SettingsItem(
     Row(
         modifier          = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(AppRadius.sm))
+            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = AppSpacing.md),
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier         = Modifier
+            modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(AccentPrimary.copy(alpha = 0.15f)),
+                .clip(RoundedCornerShape(10.dp))
+                .background(VioletFaint)
+                .border(1.dp, VioletMid, RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = AccentPrimary, modifier = Modifier.size(18.dp))
+            Icon(icon, contentDescription = null, tint = VioletBright, modifier = Modifier.size(17.dp))
         }
-        Spacer(Modifier.width(AppSpacing.md))
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+            Text(title, fontSize = 15.sp, color = TextPri)
             subtitle?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall.copy(color = TextTertiary))
+                Text(it, fontSize = 12.sp, color = TextSec)
             }
         }
         Icon(
             Icons.Default.ChevronRight,
             contentDescription = null,
-            tint               = TextTertiary,
-            modifier           = Modifier.size(18.dp)
+            tint     = Color(0x40FFFFFF),
+            modifier = Modifier.size(18.dp)
         )
     }
-    HorizontalDivider(color = DividerColor.copy(alpha = 0.5f))
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0x0DFFFFFF)))
 }
-

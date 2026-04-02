@@ -235,7 +235,8 @@ fun AuraHeader(onAIClick: () -> Unit, onVaultClick: () -> Unit) {
     Row(
         modifier          = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
+            .statusBarsPadding()
+            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {

@@ -108,7 +108,8 @@ fun AILabFeedScreen(vm: AIViewModel) {
             Row(
                 modifier          = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.xl),
+                    .statusBarsPadding()
+                    .padding(start = AppSpacing.lg, end = AppSpacing.lg, top = AppSpacing.sm, bottom = AppSpacing.xl),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(

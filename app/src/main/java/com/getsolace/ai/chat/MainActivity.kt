@@ -3,9 +3,13 @@ package com.getsolace.ai.chat
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -18,12 +22,17 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import com.getsolace.ai.chat.data.AIImageStore
@@ -81,6 +90,11 @@ enum class MainTab(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // dark 样式 = 深色背景 → 状态栏图标/文字显示为白色
+        enableEdgeToEdge(
+            statusBarStyle     = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
         AIImageStore.init(applicationContext)
         VaultStore.init(applicationContext)
         setContent {
@@ -107,12 +121,11 @@ fun MainScaffold() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.linearGradient(listOf(BgGradientStart, BgGradientEnd))
-            )
+            .background(BgDeep)
     ) {
         Scaffold(
-            containerColor = Color.Transparent,
+            containerColor      = Color.Transparent,
+            contentWindowInsets = WindowInsets(0),   // 内容铺满全屏，各屏自行处理系统栏
             bottomBar = {
                 if (showBottomBar) {
                     RunMateBottomBar(
@@ -131,13 +144,19 @@ fun MainScaffold() {
         ) { innerPadding ->
             MainNavHost(
                 navController = navController,
-                modifier      = Modifier.padding(innerPadding)
+                // 只保留底部 padding（底栏高度），顶部由各屏幕自行处理
+                modifier      = Modifier.padding(bottom = innerPadding.calculateBottomPadding())
             )
         }
     }
 }
 
-// ─── Bottom Navigation Bar ────────────────────────────────────────────────────
+// ─── Bottom Navigation Bar (Floating Glass Design) ───────────────────────────
+
+private val NavBg      = Color(0xCC0E1120)  // 80% dark glass
+private val NavBorder  = Color(0x1AFFFFFF)  // 10% white border
+private val NavViolet  = Color(0xFF9B7AFF)
+private val NavGlow    = Color(0x339B7AFF)
 
 @Composable
 fun RunMateBottomBar(
@@ -145,30 +164,97 @@ fun RunMateBottomBar(
     currentRoute: String?,
     onTabSelect: (MainTab) -> Unit
 ) {
-    NavigationBar(
-        containerColor = CardBg.copy(alpha = 0.95f),
-        contentColor   = TextPrimary,
-        tonalElevation = 0.dp
+    // Outer safe-area background — 延伸至系统导航栏底部
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(BgDeep)
+            .navigationBarsPadding()
     ) {
-        tabs.forEach { tab ->
-            val selected = currentRoute == tab.route
-            NavigationBarItem(
-                selected = selected,
-                onClick  = { onTabSelect(tab) },
-                icon = {
-                    Icon(
-                        imageVector        = if (selected) tab.selectedIcon else tab.unselectedIcon,
-                        contentDescription = tab.label
-                    )
-                },
-                label  = { Text(tab.label) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor   = AccentPrimary,
-                    selectedTextColor   = AccentPrimary,
-                    unselectedIconColor = TextTertiary,
-                    unselectedTextColor = TextTertiary,
-                    indicatorColor      = AccentPrimary.copy(alpha = 0.15f)
+        // Floating pill bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 10.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(NavBg)
+                .border(1.dp, NavBorder, RoundedCornerShape(28.dp))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment     = Alignment.CenterVertically
+        ) {
+            tabs.forEach { tab ->
+                val selected = currentRoute == tab.route
+                NavBarItem(
+                    tab      = tab,
+                    selected = selected,
+                    onClick  = { onTabSelect(tab) }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavBarItem(
+    tab: MainTab,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .clickable { onClick() }
+            .then(
+                if (selected) Modifier
+                    .background(
+                        Brush.linearGradient(
+                            listOf(NavViolet.copy(alpha = 0.20f), NavViolet.copy(alpha = 0.10f))
+                        )
+                    )
+                    .drawBehind {
+                        // Subtle glow under selected item
+                        drawCircle(
+                            brush  = Brush.radialGradient(
+                                colors = listOf(NavGlow, Color.Transparent),
+                                center = Offset(size.width / 2, size.height),
+                                radius = size.width * 0.8f
+                            ),
+                            center = Offset(size.width / 2, size.height),
+                            radius = size.width * 0.8f
+                        )
+                    }
+                else Modifier
+            )
+            .padding(horizontal = if (selected) 18.dp else 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            // Selected: icon + label side-by-side in pill
+            Row(
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector        = tab.selectedIcon,
+                    contentDescription = tab.label,
+                    tint               = NavViolet,
+                    modifier           = Modifier.size(19.dp)
+                )
+                Text(
+                    tab.label,
+                    fontSize   = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = NavViolet
+                )
+            }
+        } else {
+            // Unselected: icon only
+            Icon(
+                imageVector        = tab.unselectedIcon,
+                contentDescription = tab.label,
+                tint               = Color(0x73FFFFFF),
+                modifier           = Modifier.size(22.dp)
             )
         }
     }

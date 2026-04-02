@@ -2,39 +2,48 @@ package com.getsolace.ai.chat.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ─── iOS RunMate Design System Colors ───────────────────────────────────────
+// ─── Deep Space Dark Design System ──────────────────────────────────────────
 
-// Background gradients (iOS: #3A507C → #21304A)
-val BgGradientStart   = Color(0xFF3A507C)
-val BgGradientEnd     = Color(0xFF21304A)
+// Unified deep dark backgrounds (consistent across all screens)
+val BgGradientStart   = Color(0xFF0A0B14)   // Deep dark navy
+val BgGradientEnd     = Color(0xFF111827)   // Slightly lighter dark
 
-// Deep background (used for screens)
-val BgDeep            = Color(0xFF121226)
-val BgDeepAlt         = Color(0xFF1F1F35)
+// Deep background
+val BgDeep            = Color(0xFF0A0B14)
+val BgDeepAlt         = Color(0xFF111827)
 
-// Card backgrounds
-val CardBg            = Color(0xFF1A1A24)
-val CardBgLight       = Color(0xFF1A1629)
-val CardBgAlt         = Color(0xFF252535)
+// Card / surface colors
+val CardBg            = Color(0xFF131722)   // Main card background
+val CardBgLight       = Color(0xFF1A1E2E)   // Slightly lighter card
+val CardBgAlt         = Color(0xFF1C2135)   // Alt card background
 
-// Accent gradient (iOS: #9D50BB → #6E48AA)
-val AccentStart       = Color(0xFF9D50BB)
-val AccentEnd         = Color(0xFF6E48AA)
-val AccentPrimary     = Color(0xFF9D50BB)
+// Primary accent — Violet purple
+val AccentStart       = Color(0xFF9B7AFF)   // Bright violet
+val AccentEnd         = Color(0xFF6A4FCC)   // Deep violet
+val AccentPrimary     = Color(0xFF9B7AFF)
 
-// Border / Glow gradient (iOS: #8A2BE2 → #00FFFF)
-val GlowPurple        = Color(0xFF8A2BE2)
-val GlowCyan          = Color(0xFF00FFFF)
+// Secondary accent — Teal cyan
+val AccentTeal        = Color(0xFF00D4B4)
+val AccentTealFaint   = Color(0x1A00D4B4)
+
+// Glow colors
+val GlowPurple        = Color(0xFF7850FF)
+val GlowCyan          = Color(0xFF00C8AA)
 
 // Text colors
 val TextPrimary       = Color(0xFFFFFFFF)
-val TextSecondary     = Color(0xB3FFFFFF)  // 70%
-val TextTertiary      = Color(0x80FFFFFF)  // 50%
-val TextDisabled      = Color(0x40FFFFFF)  // 25%
+val TextSecondary     = Color(0xB3FFFFFF)   // 70%
+val TextTertiary      = Color(0x73FFFFFF)   // 45%
+val TextDisabled      = Color(0x40FFFFFF)   // 25%
 
 // Surface / overlay
-val SurfaceOverlay    = Color(0x1AFFFFFF)  // 10%
-val DividerColor      = Color(0x26FFFFFF)  // 15%
+val SurfaceOverlay    = Color(0x14FFFFFF)   // 8%
+val SurfaceGlass      = Color(0x0DFFFFFF)   // 5% glass
+val DividerColor      = Color(0x1AFFFFFF)   // 10%
+
+// Border
+val BorderSubtle      = Color(0x0FFFFFFF)   // 6%
+val BorderViolet      = Color(0x559B7AFF)   // Violet border
 
 // Status colors
 val SuccessGreen      = Color(0xFF34C759)
@@ -45,6 +54,6 @@ val WarningYellow     = Color(0xFFFFCC00)
 val Purple80          = AccentPrimary
 val PurpleGrey80      = Color(0xFFCCC2DC)
 val Pink80            = Color(0xFFEFB8C8)
-val Purple40          = Color(0xFF6E48AA)
+val Purple40          = Color(0xFF6A4FCC)
 val PurpleGrey40      = Color(0xFF625b71)
 val Pink40            = Color(0xFF7D5260)

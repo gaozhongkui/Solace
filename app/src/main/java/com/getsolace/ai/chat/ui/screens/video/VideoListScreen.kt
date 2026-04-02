@@ -94,7 +94,8 @@ fun VideoListScreen(
             Row(
                 modifier          = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.md, vertical = AppSpacing.lg),
+                    .statusBarsPadding()
+                    .padding(start = AppSpacing.md, end = AppSpacing.md, top = AppSpacing.xs, bottom = AppSpacing.lg),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { navController.popBackStack() }) {
