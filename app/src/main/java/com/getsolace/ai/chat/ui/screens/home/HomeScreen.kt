@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import coil.request.videoFrameMillis
 import com.getsolace.ai.chat.data.MediaCategory
 import com.getsolace.ai.chat.ui.theme.*
 import com.getsolace.ai.chat.viewmodel.HomeCardItem
@@ -89,13 +90,23 @@ fun HomeScreen(
     val cardLeftItems  by vm.cardLeftItems.collectAsStateWithLifecycle()
     val cardRightItems by vm.cardRightItems.collectAsStateWithLifecycle()
 
-    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-        rememberPermissionState(Manifest.permission.READ_MEDIA_IMAGES)
+    // Android 13+ 同时申请图片和视频权限（视频扫描需要 READ_MEDIA_VIDEO）
+    val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        rememberMultiplePermissionsState(
+            listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO
+            )
+        )
     else
-        rememberPermissionState(Manifest.permission.READ_EXTERNAL_STORAGE)
+        rememberMultiplePermissionsState(
+            listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        )
 
-    LaunchedEffect(permission.status) {
-        if (permission.status.isGranted) vm.startScan(context)
+    val permission = permissions   // 保持下方兼容使用
+
+    LaunchedEffect(permissions.allPermissionsGranted) {
+        if (permissions.allPermissionsGranted) vm.startScan(context)
     }
 
     // 全屏深空背景 + 右上角紫色光晕 + 左中青绿光晕
@@ -143,8 +154,8 @@ fun HomeScreen(
                 progress    = scanProgress,
                 scannedSize = scannedSize,
                 onScanClick = {
-                    if (permission.status.isGranted) vm.startScan(context)
-                    else permission.launchPermissionRequest()
+                    if (permissions.allPermissionsGranted) vm.startScan(context)
+                    else permissions.launchMultiplePermissionRequest()
                 },
                 modifier    = Modifier.padding(horizontal = 16.dp)
             )
@@ -208,9 +219,9 @@ fun HomeScreen(
             Spacer(Modifier.height(12.dp))
 
             // 媒体卡片网格
-            if (!permission.status.isGranted) {
+            if (!permissions.allPermissionsGranted) {
                 AuraPermissionCard(
-                    onRequestClick = { permission.launchPermissionRequest() },
+                    onRequestClick = { permissions.launchMultiplePermissionRequest() },
                     modifier       = Modifier.padding(horizontal = 16.dp)
                 )
             } else {
@@ -551,8 +562,15 @@ fun AuraMediaGrid(
         ) {
             leftItems.forEach { item ->
                 AuraMediaCard(
-                    item    = item,
-                    onClick = { navController.navigate("video_list/${item.category.name}") }
+                    item        = item,
+                    onClick     = { navController.navigate("video_list/${item.category.name}") },
+                    onPlayClick = item.thumbnail?.takeIf { item.category != MediaCategory.SCREENSHOTS }?.let { uri ->
+                        {
+                            val encodedUri   = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
+                            val encodedTitle = java.net.URLEncoder.encode(item.category.title, "UTF-8")
+                            navController.navigate("video_player/$encodedUri/$encodedTitle")
+                        }
+                    }
                 )
             }
         }
@@ -562,8 +580,15 @@ fun AuraMediaGrid(
         ) {
             rightItems.forEach { item ->
                 AuraMediaCard(
-                    item    = item,
-                    onClick = { navController.navigate("video_list/${item.category.name}") }
+                    item        = item,
+                    onClick     = { navController.navigate("video_list/${item.category.name}") },
+                    onPlayClick = item.thumbnail?.takeIf { item.category != MediaCategory.SCREENSHOTS }?.let { uri ->
+                        {
+                            val encodedUri   = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
+                            val encodedTitle = java.net.URLEncoder.encode(item.category.title, "UTF-8")
+                            navController.navigate("video_player/$encodedUri/$encodedTitle")
+                        }
+                    }
                 )
             }
         }
@@ -575,7 +600,11 @@ fun AuraMediaGrid(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 @Composable
-fun AuraMediaCard(item: HomeCardItem, onClick: () -> Unit) {
+fun AuraMediaCard(
+    item: HomeCardItem,
+    onClick: () -> Unit,
+    onPlayClick: (() -> Unit)? = null
+) {
 
     // 每个分类对应颜色 & 高度
     val accent = when (item.category) {
@@ -606,8 +635,13 @@ fun AuraMediaCard(item: HomeCardItem, onClick: () -> Unit) {
     ) {
         // 缩略图（有则显示）
         if (item.thumbnail != null) {
+            val context = LocalContext.current
             AsyncImage(
-                model              = item.thumbnail,
+                model = coil.request.ImageRequest.Builder(context)
+                    .data(item.thumbnail)
+                    .videoFrameMillis(1000)   // 取第 1 秒帧作为封面
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 contentScale       = ContentScale.Crop,
                 modifier           = Modifier.fillMaxSize()
@@ -658,22 +692,29 @@ fun AuraMediaCard(item: HomeCardItem, onClick: () -> Unit) {
             CategoryBadgeIcon(item.category, accent)
         }
 
-        // 视频播放按钮（视频类别居中显示）
-        if (item.category == MediaCategory.ALL_VIDEOS || item.category == MediaCategory.SHORT_VIDEOS) {
+        // 视频播放按钮（视频类别居中显示，有 onPlayClick 时可直接播放）
+        if (item.category != MediaCategory.SCREENSHOTS) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.15f))
-                    .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
-                    .align(Alignment.Center),
+                    .background(
+                        if (onPlayClick != null) Color.White.copy(alpha = 0.22f)
+                        else Color.White.copy(alpha = 0.12f)
+                    )
+                    .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                    .align(Alignment.Center)
+                    .then(
+                        if (onPlayClick != null) Modifier.clickable { onPlayClick() }
+                        else Modifier
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint     = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.size(16.dp)
+                    contentDescription = "播放",
+                    tint     = Color.White,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

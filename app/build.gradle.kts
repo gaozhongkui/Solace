@@ -50,6 +50,7 @@ dependencies {
 
     // Image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("io.coil-kt:coil-video:2.5.0")   // 视频帧缩略图支持
 
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.8.0")
@@ -76,6 +77,11 @@ dependencies {
 
     // Permissions helper
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+
+    // Media3 ExoPlayer — 视频播放
+    implementation("androidx.media3:media3-exoplayer:1.3.1")
+    implementation("androidx.media3:media3-ui:1.3.1")
+    implementation("androidx.media3:media3-common:1.3.1")
 
     // Compose Material Icons Extended
     implementation("androidx.compose.material:material-icons-extended:1.6.8")

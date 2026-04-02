@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import coil.request.videoFrameMillis
 import com.getsolace.ai.chat.data.MediaCategory
 import com.getsolace.ai.chat.data.MediaItem
 import com.getsolace.ai.chat.data.MediaManager
@@ -169,7 +170,16 @@ fun VideoListScreen(
                     modifier        = Modifier.weight(1f)
                 ) {
                     items(sortedItems, key = { it.id }) { item ->
-                        MediaRowItem(item = item)
+                        MediaRowItem(
+                            item    = item,
+                            onClick = {
+                                if (item.isVideo) {
+                                    val encodedUri   = java.net.URLEncoder.encode(item.uri.toString(), "UTF-8")
+                                    val encodedTitle = java.net.URLEncoder.encode(item.displayName, "UTF-8")
+                                    navController.navigate("video_player/$encodedUri/$encodedTitle")
+                                }
+                            }
+                        )
                     }
                 }
             }
@@ -226,7 +236,7 @@ fun StatCell(label: String, value: String) {
 // ─── Media Row Item (mirrors iOS VideoRowView) ────────────────────────────────
 
 @Composable
-fun MediaRowItem(item: MediaItem) {
+fun MediaRowItem(item: MediaItem, onClick: () -> Unit = {}) {
     val dateStr = remember(item.dateAdded) {
         SimpleDateFormat("MM月dd日 HH:mm", Locale.CHINA).format(Date(item.dateAdded * 1000))
     }
@@ -238,7 +248,10 @@ fun MediaRowItem(item: MediaItem) {
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .clickable { pressed = !pressed },
+            .clickable {
+                pressed = !pressed
+                onClick()
+            },
         shape  = RoundedCornerShape(AppRadius.sm),
         colors = CardDefaults.cardColors(containerColor = CardBg)
     ) {
@@ -254,8 +267,15 @@ fun MediaRowItem(item: MediaItem) {
                     .background(CardBgAlt),
                 contentAlignment = Alignment.Center
             ) {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
                 AsyncImage(
-                    model              = item.uri,
+                    model = if (item.isVideo) {
+                        coil.request.ImageRequest.Builder(ctx)
+                            .data(item.uri)
+                            .videoFrameMillis(1000)
+                            .crossfade(true)
+                            .build()
+                    } else item.uri,
                     contentDescription = null,
                     contentScale       = ContentScale.Crop,
                     modifier           = Modifier.fillMaxSize()

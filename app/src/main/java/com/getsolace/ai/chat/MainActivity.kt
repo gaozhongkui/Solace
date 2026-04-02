@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.getsolace.ai.chat
 
 import android.os.Bundle
@@ -49,6 +51,7 @@ import com.getsolace.ai.chat.ui.screens.home.HomeScreen
 import com.getsolace.ai.chat.ui.screens.me.MeScreen
 import com.getsolace.ai.chat.ui.screens.vault.VaultScreen
 import com.getsolace.ai.chat.ui.screens.video.VideoListScreen
+import com.getsolace.ai.chat.ui.screens.video.VideoPlayerScreen
 import com.getsolace.ai.chat.ui.theme.*
 
 // ─── Tab Definition ───────────────────────────────────────────────────────────
@@ -282,6 +285,18 @@ fun MainNavHost(
         composable("video_list/{category}") { backStack ->
             val category = backStack.arguments?.getString("category") ?: "ALL_VIDEOS"
             VideoListScreen(categoryName = category, navController = navController)
+        }
+        // ── Video Player ──────────────────────────────────────────────────────
+        composable("video_player/{encodedUri}/{encodedTitle}") { backStack ->
+            val encodedUri   = backStack.arguments?.getString("encodedUri") ?: return@composable
+            val encodedTitle = backStack.arguments?.getString("encodedTitle") ?: ""
+            val videoUri     = android.net.Uri.parse(java.net.URLDecoder.decode(encodedUri, "UTF-8"))
+            val title        = java.net.URLDecoder.decode(encodedTitle, "UTF-8")
+            VideoPlayerScreen(
+                videoUri      = videoUri,
+                title         = title,
+                navController = navController
+            )
         }
         composable("galaxy") {
             ImageGalaxyScreen(navController = navController)
