@@ -136,7 +136,10 @@ fun MainScaffold() {
                         currentRoute = currentRoute,
                         onTabSelect  = { tab ->
                             navController.navigate(tab.route) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                // 用 route 字符串 popUpTo，避免 startDestinationId hash 不准确的问题
+                                popUpTo(MainTab.HOME.route) {
+                                    saveState = true
+                                }
                                 launchSingleTop = true
                                 restoreState    = true
                             }
