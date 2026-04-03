@@ -38,7 +38,11 @@ fun MosaicScreen(navController: NavController) {
                 val chunks = photos.chunked(3)
                 items(chunks.indices.toList()) { index ->
                     val chunk = chunks[index]
-                    MosaicRow(photos = chunk, pattern = index % 3)
+                    val onPhotoClick: (android.net.Uri) -> Unit = { uri ->
+                        val encoded = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
+                        navController.navigate("photo_detail/$encoded")
+                    }
+                    MosaicRow(photos = chunk, pattern = index % 3, onPhotoClick = onPhotoClick)
                     Spacer(Modifier.height(4.dp))
                 }
             }
@@ -47,63 +51,63 @@ fun MosaicScreen(navController: NavController) {
 }
 
 @Composable
-fun MosaicRow(photos: List<Photo>, pattern: Int) {
+fun MosaicRow(photos: List<Photo>, pattern: Int, onPhotoClick: (android.net.Uri) -> Unit = {}) {
     when (pattern) {
-        0 -> LayoutOneLeftTwoRight(photos)
-        1 -> LayoutOneLargeBottom(photos)
-        else -> LayoutThreeEqual(photos)
+        0 -> LayoutOneLeftTwoRight(photos, onPhotoClick)
+        1 -> LayoutOneLargeBottom(photos, onPhotoClick)
+        else -> LayoutThreeEqual(photos, onPhotoClick)
     }
 }
 
 @Composable
-fun LayoutOneLeftTwoRight(photos: List<Photo>) {
+fun LayoutOneLeftTwoRight(photos: List<Photo>, onPhotoClick: (android.net.Uri) -> Unit = {}) {
     Row(
         modifier = Modifier.fillMaxWidth().height(200.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        PhotoTile(photo = photos.getOrNull(0), modifier = Modifier.weight(0.6f).fillMaxHeight())
+        PhotoTile(photo = photos.getOrNull(0), modifier = Modifier.weight(0.6f).fillMaxHeight(), onPhotoClick = onPhotoClick)
         Column(
             modifier = Modifier.weight(0.4f).fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            PhotoTile(photo = photos.getOrNull(1), modifier = Modifier.weight(1f).fillMaxWidth())
-            PhotoTile(photo = photos.getOrNull(2), modifier = Modifier.weight(1f).fillMaxWidth())
+            PhotoTile(photo = photos.getOrNull(1), modifier = Modifier.weight(1f).fillMaxWidth(), onPhotoClick = onPhotoClick)
+            PhotoTile(photo = photos.getOrNull(2), modifier = Modifier.weight(1f).fillMaxWidth(), onPhotoClick = onPhotoClick)
         }
     }
 }
 
 @Composable
-fun LayoutOneLargeBottom(photos: List<Photo>) {
+fun LayoutOneLargeBottom(photos: List<Photo>, onPhotoClick: (android.net.Uri) -> Unit = {}) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().height(120.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            PhotoTile(photo = photos.getOrNull(0), modifier = Modifier.weight(1f).fillMaxHeight())
-            PhotoTile(photo = photos.getOrNull(1), modifier = Modifier.weight(1f).fillMaxHeight())
+            PhotoTile(photo = photos.getOrNull(0), modifier = Modifier.weight(1f).fillMaxHeight(), onPhotoClick = onPhotoClick)
+            PhotoTile(photo = photos.getOrNull(1), modifier = Modifier.weight(1f).fillMaxHeight(), onPhotoClick = onPhotoClick)
         }
-        PhotoTile(photo = photos.getOrNull(2), modifier = Modifier.fillMaxWidth().height(160.dp))
+        PhotoTile(photo = photos.getOrNull(2), modifier = Modifier.fillMaxWidth().height(160.dp), onPhotoClick = onPhotoClick)
     }
 }
 
 @Composable
-fun LayoutThreeEqual(photos: List<Photo>) {
+fun LayoutThreeEqual(photos: List<Photo>, onPhotoClick: (android.net.Uri) -> Unit = {}) {
     Row(
         modifier = Modifier.fillMaxWidth().height(140.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         photos.take(3).forEach { photo ->
-            PhotoTile(photo = photo, modifier = Modifier.weight(1f).fillMaxHeight())
+            PhotoTile(photo = photo, modifier = Modifier.weight(1f).fillMaxHeight(), onPhotoClick = onPhotoClick)
         }
     }
 }
 
 @Composable
-fun PhotoTile(photo: Photo?, modifier: Modifier = Modifier) {
+fun PhotoTile(photo: Photo?, modifier: Modifier = Modifier, onPhotoClick: (android.net.Uri) -> Unit = {}) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .clickable { }
+            .clickable { photo?.uri?.let(onPhotoClick) }
     ) {
         SolaceAsyncImage(
             model = photo?.uri,

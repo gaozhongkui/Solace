@@ -151,7 +151,7 @@ fun VideoListScreen(
             // ── List ──────────────────────────────────────────────────────────
             if (sortedItems.isEmpty()) {
                 Box(
-                    modifier         = Modifier.weight(1f),
+                    modifier         = Modifier.weight(1f).fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -173,10 +173,12 @@ fun VideoListScreen(
                         MediaRowItem(
                             item    = item,
                             onClick = {
+                                val encodedUri = java.net.URLEncoder.encode(item.uri.toString(), "UTF-8")
                                 if (item.isVideo) {
-                                    val encodedUri   = java.net.URLEncoder.encode(item.uri.toString(), "UTF-8")
                                     val encodedTitle = java.net.URLEncoder.encode(item.displayName, "UTF-8")
                                     navController.navigate("video_player/$encodedUri/$encodedTitle")
+                                } else {
+                                    navController.navigate("photo_detail/$encodedUri")
                                 }
                             }
                         )

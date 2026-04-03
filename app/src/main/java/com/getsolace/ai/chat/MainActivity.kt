@@ -46,6 +46,7 @@ import com.getsolace.ai.chat.data.AppStrategy
 import com.getsolace.ai.chat.data.VaultStore
 import com.getsolace.ai.chat.ui.screens.ai.CreateAIScreen
 import com.getsolace.ai.chat.ui.screens.gallery.ImageGalaxyScreen
+import com.getsolace.ai.chat.ui.screens.gallery.PhotoDetailScreen
 import com.getsolace.ai.chat.ui.screens.gallery.MosaicScreen
 import com.getsolace.ai.chat.ui.screens.gallery.PolaroidScreen
 import com.getsolace.ai.chat.ui.screens.gallery.RadialScreen
@@ -351,6 +352,11 @@ fun MainNavHost(
         }
         composable("galaxy") {
             ImageGalaxyScreen(navController = navController)
+        }
+        // ── Photo Detail ──────────────────────────────────────────────────────
+        composable("photo_detail/{encodedUri}") { backStack ->
+            val encodedUri = backStack.arguments?.getString("encodedUri") ?: return@composable
+            PhotoDetailScreen(encodedUri = encodedUri, navController = navController)
         }
 
         // ── Legacy gallery routes (kept for Create tab sub-navigation) ────────

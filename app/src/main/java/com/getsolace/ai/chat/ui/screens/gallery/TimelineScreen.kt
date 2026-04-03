@@ -42,7 +42,10 @@ fun TimelineScreen(navController: NavController) {
                         TimelineDateHeader(date = formatDateLabel(date))
                     }
                     item {
-                        TimelinePhotoRow(photos = datePhotos)
+                        TimelinePhotoRow(photos = datePhotos, onPhotoClick = { uri ->
+                            val encoded = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
+                            navController.navigate("photo_detail/$encoded")
+                        })
                         Spacer(Modifier.height(8.dp))
                     }
                 }
@@ -66,7 +69,7 @@ fun TimelineDateHeader(date: String) {
 }
 
 @Composable
-fun TimelinePhotoRow(photos: List<Photo>) {
+fun TimelinePhotoRow(photos: List<Photo>, onPhotoClick: (android.net.Uri) -> Unit = {}) {
     val heights = remember(photos) {
         photos.map { listOf(100, 130, 110, 90, 120).random() }
     }
@@ -76,19 +79,19 @@ fun TimelinePhotoRow(photos: List<Photo>) {
         verticalAlignment = Alignment.Bottom
     ) {
         photos.take(5).forEachIndexed { index, photo ->
-            TimelinePhotoItem(photo = photo, height = heights.getOrElse(index) { 110 })
+            TimelinePhotoItem(photo = photo, height = heights.getOrElse(index) { 110 }, onPhotoClick = onPhotoClick)
         }
     }
 }
 
 @Composable
-fun RowScope.TimelinePhotoItem(photo: Photo, height: Int) {
+fun RowScope.TimelinePhotoItem(photo: Photo, height: Int, onPhotoClick: (android.net.Uri) -> Unit = {}) {
     Box(
         modifier = Modifier
             .weight(1f)
             .height(height.dp)
             .clip(RoundedCornerShape(10.dp))
-            .clickable { }
+            .clickable { onPhotoClick(photo.uri) }
     ) {
         SolaceAsyncImage(
             model = photo.uri,
