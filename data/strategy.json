@@ -1,0 +1,13 @@
+{
+  "version": 5,
+  "forceUpdate": false,
+  "minVersionCode": 100,
+  "updateUrl": "https://your-app-store.com/download",
+  "maintenance": false,
+  "maintenanceMsg": "系统维护中，请稍后再试",
+  "featureFlags": {
+    "new_payment_flow": true,
+    "beta_search": false,
+    "dark_mode_v2": true
+  }
+}

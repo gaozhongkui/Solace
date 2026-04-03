@@ -25,8 +25,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
 import coil.request.videoFrameMillis
+import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.MediaCategory
 import com.getsolace.ai.chat.data.MediaItem
 import com.getsolace.ai.chat.data.MediaManager
@@ -263,12 +263,11 @@ fun MediaRowItem(item: MediaItem, onClick: () -> Unit = {}) {
             Box(
                 modifier         = Modifier
                     .size(64.dp)
-                    .clip(RoundedCornerShape(AppRadius.sm))
-                    .background(CardBgAlt),
+                    .clip(RoundedCornerShape(AppRadius.sm)),
                 contentAlignment = Alignment.Center
             ) {
                 val ctx = androidx.compose.ui.platform.LocalContext.current
-                AsyncImage(
+                SolaceAsyncImage(
                     model = if (item.isVideo) {
                         coil.request.ImageRequest.Builder(ctx)
                             .data(item.uri)
@@ -278,7 +277,8 @@ fun MediaRowItem(item: MediaItem, onClick: () -> Unit = {}) {
                     } else item.uri,
                     contentDescription = null,
                     contentScale       = ContentScale.Crop,
-                    modifier           = Modifier.fillMaxSize()
+                    modifier           = Modifier.fillMaxSize(),
+                    shape              = RoundedCornerShape(AppRadius.sm)
                 )
                 if (item.isVideo) {
                     Box(

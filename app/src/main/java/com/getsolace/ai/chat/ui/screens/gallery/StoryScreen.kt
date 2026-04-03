@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
+import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.Photo
 import com.getsolace.ai.chat.ui.screens.ScreenScaffold
 import com.getsolace.ai.chat.data.rememberGalleryPhotos
@@ -112,7 +112,7 @@ fun StoryGallery(photos: List<Photo>) {
                             else currentIndex = 0
                         }
                 ) {
-                    AsyncImage(
+                    SolaceAsyncImage(
                         model = photos[index].uri,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
@@ -199,11 +199,12 @@ fun StoryThumbnail(photo: Photo, isSelected: Boolean, onClick: () -> Unit) {
             )
             .clickable(onClick = onClick)
     ) {
-        AsyncImage(
+        SolaceAsyncImage(
             model = photo.uri,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier.matchParentSize(),
+            shape = RoundedCornerShape(8.dp)
         )
     }
 }

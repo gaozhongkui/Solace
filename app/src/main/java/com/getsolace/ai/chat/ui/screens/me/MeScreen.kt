@@ -24,7 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.AIGeneratedImage
 import com.getsolace.ai.chat.data.AIImageStore
 import com.getsolace.ai.chat.ui.screens.ai.RunMateToast
@@ -400,14 +400,14 @@ fun AIHistoryCard(image: AIGeneratedImage, onClick: () -> Unit) {
             .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
     ) {
-        if (image.imageUrl.isNotBlank()) {
-            AsyncImage(
-                model              = image.imageUrl,
-                contentDescription = image.prompt,
-                contentScale       = ContentScale.Crop,
-                modifier           = Modifier.fillMaxSize()
-            )
-        } else {
+        SolaceAsyncImage(
+            model              = if (image.imageUrl.isNotBlank()) image.imageUrl else null,
+            contentDescription = image.prompt,
+            contentScale       = ContentScale.Crop,
+            modifier           = Modifier.fillMaxSize(),
+            shape              = RoundedCornerShape(12.dp)
+        )
+        if (image.imageUrl.isBlank()) {
             Box(
                 modifier         = Modifier.fillMaxSize().background(Color(0xFF1C2135)),
                 contentAlignment = Alignment.Center
@@ -542,14 +542,13 @@ fun AIImageDetailOverlay(
                     .clip(RoundedCornerShape(20.dp))
                     .background(CardSurface)
             ) {
-                if (image.imageUrl.isNotBlank()) {
-                    AsyncImage(
-                        model              = image.imageUrl,
-                        contentDescription = image.prompt,
-                        contentScale       = ContentScale.Crop,
-                        modifier           = Modifier.fillMaxSize()
-                    )
-                }
+                SolaceAsyncImage(
+                    model              = if (image.imageUrl.isNotBlank()) image.imageUrl else null,
+                    contentDescription = image.prompt,
+                    contentScale       = ContentScale.Crop,
+                    modifier           = Modifier.fillMaxSize(),
+                    shape              = RoundedCornerShape(20.dp)
+                )
             }
 
             Spacer(Modifier.height(20.dp))

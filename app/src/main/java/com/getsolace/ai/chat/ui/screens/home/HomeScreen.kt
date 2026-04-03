@@ -38,8 +38,8 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
 import coil.request.videoFrameMillis
+import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.MediaCategory
 import com.getsolace.ai.chat.ui.theme.*
 import com.getsolace.ai.chat.viewmodel.HomeCardItem
@@ -659,7 +659,7 @@ fun AuraMediaCard(
             )
         } else if (item.thumbnail != null) {
             // 截图分类：静态图片
-            AsyncImage(
+            SolaceAsyncImage(
                 model = coil.request.ImageRequest.Builder(context)
                     .data(item.thumbnail)
                     .crossfade(true)

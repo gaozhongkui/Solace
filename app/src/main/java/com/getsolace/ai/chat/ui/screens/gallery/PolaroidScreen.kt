@@ -19,7 +19,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
+import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.Photo
 import com.getsolace.ai.chat.ui.screens.ScreenScaffold
 import com.getsolace.ai.chat.data.rememberGalleryPhotos
@@ -145,15 +145,15 @@ fun DraggablePolaroid(
             }
     ) {
         Column {
-            AsyncImage(
+            SolaceAsyncImage(
                 model = state.photo.uri,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .padding(8.dp),
+                shape = RoundedCornerShape(2.dp)
             )
             Box(
                 modifier = Modifier

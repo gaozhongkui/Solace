@@ -16,7 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
+import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.Photo
 import com.getsolace.ai.chat.data.formatDateLabel
 import com.getsolace.ai.chat.data.groupByDate
@@ -90,11 +90,12 @@ fun RowScope.TimelinePhotoItem(photo: Photo, height: Int) {
             .clip(RoundedCornerShape(10.dp))
             .clickable { }
     ) {
-        AsyncImage(
+        SolaceAsyncImage(
             model = photo.uri,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier.matchParentSize(),
+            shape = RoundedCornerShape(10.dp)
         )
     }
 }

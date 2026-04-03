@@ -11,13 +11,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
+import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.Photo
 import com.getsolace.ai.chat.ui.screens.ScreenScaffold
 import com.getsolace.ai.chat.data.rememberGalleryPhotos
@@ -104,16 +103,14 @@ fun PhotoTile(photo: Photo?, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(Color.Gray.copy(alpha = 0.15f))
             .clickable { }
     ) {
-        if (photo != null) {
-            AsyncImage(
-                model = photo.uri,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize()
-            )
-        }
+        SolaceAsyncImage(
+            model = photo?.uri,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize(),
+            shape = RoundedCornerShape(8.dp)
+        )
     }
 }

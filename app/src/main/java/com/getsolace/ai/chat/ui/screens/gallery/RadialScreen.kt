@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
+import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.Photo
 import com.getsolace.ai.chat.ui.screens.ScreenScaffold
 import com.getsolace.ai.chat.data.rememberGalleryPhotos
@@ -90,11 +90,12 @@ fun RadialGallery(photos: List<Photo>) {
                         .clickable { selectedIndex = photos.indexOf(photo) }
                         .zIndex(2f)
                 ) {
-                    AsyncImage(
+                    SolaceAsyncImage(
                         model = photo.uri,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.matchParentSize()
+                        modifier = Modifier.matchParentSize(),
+                        shape = CircleShape
                     )
                 }
             }
@@ -107,11 +108,12 @@ fun RadialGallery(photos: List<Photo>) {
                     .border(4.dp, MaterialTheme.colorScheme.surface, CircleShape)
                     .zIndex(5f)
             ) {
-                AsyncImage(
+                SolaceAsyncImage(
                     model = centerPhoto.uri,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize()
+                    modifier = Modifier.matchParentSize(),
+                    shape = CircleShape
                 )
             }
         }

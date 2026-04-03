@@ -32,8 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
 import com.getsolace.ai.chat.data.*
+import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.ui.theme.*
 import com.getsolace.ai.chat.viewmodel.AIViewModel
 
@@ -281,11 +281,12 @@ fun FeedImageCard(item: FeedItem, onClick: () -> Unit) {
             .background(CardBg)
             .clickable(onClick = onClick)
     ) {
-        AsyncImage(
+        SolaceAsyncImage(
             model              = item.imageUrl,
             contentDescription = item.prompt,
             contentScale       = ContentScale.Crop,
-            modifier           = Modifier.fillMaxSize()
+            modifier           = Modifier.fillMaxSize(),
+            shape              = RoundedCornerShape(AppRadius.md)
         )
         // Prompt overlay
         Box(
@@ -343,7 +344,7 @@ fun FeedItemDetailOverlay(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                AsyncImage(
+                SolaceAsyncImage(
                     model              = item.imageUrl,
                     contentDescription = item.prompt,
                     contentScale       = ContentScale.Fit,
@@ -393,14 +394,13 @@ fun AIFeedCard(image: AIGeneratedImage) {
             .clip(RoundedCornerShape(AppRadius.md))
             .background(CardBg)
     ) {
-        if (image.imageUrl.isNotBlank()) {
-            AsyncImage(
-                model              = image.imageUrl,
-                contentDescription = image.prompt,
-                contentScale       = ContentScale.Crop,
-                modifier           = Modifier.fillMaxSize()
-            )
-        }
+        SolaceAsyncImage(
+            model              = if (image.imageUrl.isNotBlank()) image.imageUrl else null,
+            contentDescription = image.prompt,
+            contentScale       = ContentScale.Crop,
+            modifier           = Modifier.fillMaxSize(),
+            shape              = RoundedCornerShape(AppRadius.md)
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -718,11 +718,12 @@ fun AIResultScreen(imageUrl: String, vm: AIViewModel) {
                     .background(CardBg)
                     .border(2.dp, Brush.linearGradient(listOf(GlowPurple, GlowCyan)), RoundedCornerShape(AppRadius.lg))
             ) {
-                AsyncImage(
+                SolaceAsyncImage(
                     model              = imageUrl,
                     contentDescription = prompt,
                     contentScale       = ContentScale.Crop,
-                    modifier           = Modifier.fillMaxSize()
+                    modifier           = Modifier.fillMaxSize(),
+                    shape              = RoundedCornerShape(AppRadius.lg)
                 )
             }
             Spacer(Modifier.height(AppSpacing.lg))

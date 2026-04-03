@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
+import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.Photo
 import com.getsolace.ai.chat.ui.screens.ScreenScaffold
 import com.getsolace.ai.chat.data.rememberGalleryPhotos
@@ -101,7 +101,7 @@ fun StackedCardGallery(photos: List<Photo>) {
                     },
                 contentAlignment = Alignment.BottomStart
             ) {
-                AsyncImage(
+                SolaceAsyncImage(
                     model = photos[currentIndex].uri,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
@@ -180,11 +180,12 @@ fun StackedCard(
             .size(width = 280.dp, height = 380.dp)
             .clip(RoundedCornerShape(24.dp))
     ) {
-        AsyncImage(
+        SolaceAsyncImage(
             model = photo.uri,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier.matchParentSize(),
+            shape = RoundedCornerShape(24.dp)
         )
     }
 }
