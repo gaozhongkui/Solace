@@ -47,12 +47,8 @@ object VaultStore {
         // Write encrypted file
         File(vaultDir(), fileName).writeBytes(encrypted)
 
-        // Thumbnail (small, unencrypted in memory only via base64 for display)
-        val thumbBitmap = Bitmap.createScaledBitmap(bitmap, 200, 200, true)
-        val thumbBytes  = ByteArrayOutputStream().also {
-            thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 70, it)
-        }.toByteArray()
-        val thumbBase64 = android.util.Base64.encodeToString(thumbBytes, android.util.Base64.DEFAULT)
+        // 不存储缩略图，保护隐私
+        val thumbBase64 = ""
 
         val record = EncryptedImage(
             id             = id,
