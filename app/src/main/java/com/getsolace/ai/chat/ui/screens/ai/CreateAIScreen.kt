@@ -31,7 +31,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
+import com.getsolace.ai.chat.CreateAIActivity
 import com.getsolace.ai.chat.data.*
 import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.ui.theme.*
@@ -100,7 +102,7 @@ fun AILabFeedScreen(vm: AIViewModel) {
     val isLoadingMore  by UnifiedFeedManager.isLoadingMore.collectAsStateWithLifecycle()
     val myHistory      by AIImageStore.images.collectAsStateWithLifecycle()
     var showConfig  by remember { mutableStateOf(false) }
-    var selectedFeedItem by remember { mutableStateOf<FeedItem?>(null) }
+    val context = LocalContext.current
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -189,7 +191,11 @@ fun AILabFeedScreen(vm: AIViewModel) {
                             items(feedItems, key = { it.id }) { feedItem ->
                                 FeedImageCard(
                                     item    = feedItem,
-                                    onClick = { selectedFeedItem = feedItem }
+                                    onClick = {
+                                        context.startActivity(
+                                            CreateAIActivity.newIntent(context, feedItem.prompt)
+                                        )
+                                    }
                                 )
                             }
                             if (isLoadingMore) {
@@ -251,18 +257,6 @@ fun AILabFeedScreen(vm: AIViewModel) {
             AIConfigSheet(vm = vm, onDismiss = { showConfig = false })
         }
 
-        // ── Feed image detail ─────────────────────────────────────────────────
-        selectedFeedItem?.let { fi ->
-            FeedItemDetailOverlay(
-                item      = fi,
-                onDismiss = { selectedFeedItem = null },
-                onUsePrompt = { prompt ->
-                    vm.setPrompt(prompt)
-                    selectedFeedItem = null
-                    showConfig = true
-                }
-            )
-        }
     }
 }
 
