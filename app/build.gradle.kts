@@ -19,6 +19,14 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // ── 策略配置 ──────────────────────────────────────────
+        buildConfigField("String", "STRATEGY_BASE_URL",  "\"https://gitee.com/\"")
+        buildConfigField("String", "STRATEGY_OWNER",     "\"gaozhongkui\"")
+        buildConfigField("String", "STRATEGY_REPO",      "\"app_config\"")
+        buildConfigField("String", "STRATEGY_FILE_PATH", "\"solace_strategy.json\"")
+        buildConfigField("String", "STRATEGY_BRANCH",    "\"master\"")
+        buildConfigField("String", "STRATEGY_TOKEN",     "\"\"")
     }
 
     buildTypes {

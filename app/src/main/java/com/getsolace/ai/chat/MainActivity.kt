@@ -37,7 +37,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
+import android.content.Intent
+import android.net.Uri
+import android.util.Log
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.getsolace.ai.chat.data.AIImageStore
+import com.getsolace.ai.chat.data.AppStrategy
 import com.getsolace.ai.chat.data.VaultStore
 import com.getsolace.ai.chat.ui.screens.ai.CreateAIScreen
 import com.getsolace.ai.chat.ui.screens.gallery.ImageGalaxyScreen
@@ -118,8 +123,51 @@ fun MainScaffold() {
 
     val tabs = MainTab.entries
     val rootRoutes = tabs.map { it.route }.toSet()
-    // Also show bottom bar on galaxy screen
     val showBottomBar = currentRoute in rootRoutes || currentRoute == "galaxy"
+
+    // ── 策略观察 ─────────────────────────────────────────────────────────────
+    val strategy by SolaceApplication.strategyFlow.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // 强制更新弹窗：服务端 minVersionCode > 当前 versionCode
+    val needForceUpdate = strategy != null &&
+            strategy!!.forceUpdate &&
+            strategy!!.minVersionCode > BuildConfig.VERSION_CODE
+
+    // 维护模式弹窗
+    val inMaintenance = strategy?.maintenance == true
+
+
+    Log.d("gzk", "MainScaffold() called"+strategy?.featureFlags?.get("name"))
+
+    if (needForceUpdate) {
+        StrategyDialog(
+            title   = "发现新版本",
+            message = "当前版本过低，请更新后继续使用",
+            confirmText = "立即更新",
+            dismissible = false,
+            onConfirm = {
+                val url = strategy!!.updateUrl.ifBlank { "market://details?id=${context.packageName}" }
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                }
+            }
+        )
+        return
+    }
+
+    if (inMaintenance) {
+        StrategyDialog(
+            title   = "系统维护中",
+            message = strategy!!.maintenanceMsg.ifBlank { "服务维护中，请稍后再试" },
+            confirmText = "知道了",
+            dismissible = false,
+            onConfirm = {}
+        )
+        return
+    }
 
     Box(
         modifier = Modifier
@@ -221,7 +269,7 @@ private fun NavBarItem(
                     .drawBehind {
                         // Subtle glow under selected item
                         drawCircle(
-                            brush  = Brush.radialGradient(
+                            brush = Brush.radialGradient(
                                 colors = listOf(NavGlow, Color.Transparent),
                                 center = Offset(size.width / 2, size.height),
                                 radius = size.width * 0.8f
@@ -313,4 +361,29 @@ fun MainNavHost(
         composable("radial")        { RadialScreen(navController) }
         composable("story")         { StoryScreen(navController) }
     }
+}
+
+// ─── Strategy Dialog ──────────────────────────────────────────────────────────
+
+@Composable
+private fun StrategyDialog(
+    title: String,
+    message: String,
+    confirmText: String,
+    dismissible: Boolean,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { if (dismissible) { /* allow */ } },
+        containerColor   = CardBgAlt,
+        titleContentColor   = TextPrimary,
+        textContentColor    = TextSecondary,
+        title = { Text(title, fontWeight = FontWeight.Bold) },
+        text  = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(confirmText, color = AccentPrimary, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    )
 }
