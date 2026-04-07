@@ -98,7 +98,7 @@ private fun positionFor(p: ImageParticle, shape: GalaxyShape, total: Int, time: 
         GalaxyShape.SPHERE -> {
             val phi = acos(1.0 - 2.0 * (p.index + 0.5) / max(total, 1))
             val theta = p.index * PI * (3.0 - sqrt(5.0))
-            Vec3(280.0 * sin(phi) * cos(theta), 280.0 * sin(phi) * sin(theta), 280.0 * cos(phi))
+            Vec3(420.0 * sin(phi) * cos(theta), 420.0 * sin(phi) * sin(theta), 420.0 * cos(phi))
         }
         GalaxyShape.HEART -> {
             val a = t * 2.0 * PI
@@ -286,7 +286,7 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
         stars = (0 until 180).map { StarParticle(rng.nextFloat(), rng.nextFloat(), 1f + rng.nextFloat() * 2.5f, 0.2f + rng.nextFloat() * 0.7f, rng.nextFloat() * 10f) }
         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
         if (ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED) {
-            val loaded = loadGalleryImages(context, 130)
+            val loaded = loadGalleryImages(context, 36)
             particles = loaded.mapIndexed { i, (id, bmp) -> ImageParticle(id, bmp?.asImageBitmap(), i, abs(id.hashCode())) }
         }
     }
@@ -342,8 +342,10 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
                     p to rotate(positionFor(p, currentShape, particles.size, animationTime, size.width, size.height), rotX, rotY)
                 }.sortedByDescending { it.second.z }.forEach { (p, rotated) ->
                     val proj = project(rotated, size.width, size.height, zoomScale)
-                    val pSize = (95f + 65f * proj.scale) * (1f + 0.05f * sin(animationTime * 2.5 + p.seed % 10).toFloat())
-                    drawGalaxyParticle(p, proj.x, proj.y, pSize, (0.25f + (proj.scale * 0.75f)).coerceIn(0f, 1f), glowColor, currentShape)
+                    val pSize = (48f + 42f * proj.scale) * (1f + 0.04f * sin(animationTime * 2.5 + p.seed % 10).toFloat())
+                    // 景深：前景清晰，背景淡出
+                    val alpha = (proj.scale * proj.scale).coerceIn(0.08f, 1f)
+                    drawGalaxyParticle(p, proj.x, proj.y, pSize, alpha, glowColor, currentShape)
                 }
             }
 
