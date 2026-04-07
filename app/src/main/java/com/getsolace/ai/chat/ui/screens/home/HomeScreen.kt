@@ -150,8 +150,16 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             AuraHeader(
-                onAIClick    = { navController.navigate("create") },
-                onVaultClick = { navController.navigate("vault") }
+                onAIClick    = { navController.navigate("create") {
+                    popUpTo("home") { saveState = true }
+                    launchSingleTop = true
+                    restoreState    = true
+                }},
+                onVaultClick = { navController.navigate("vault") {
+                    popUpTo("home") { saveState = true }
+                    launchSingleTop = true
+                    restoreState    = true
+                }}
             )
 
             // 扫描卡片
@@ -184,7 +192,11 @@ fun HomeScreen(
                     bgBrush     = Brush.linearGradient(
                         listOf(Color(0x7050329A), Color(0x601A0E6D))
                     ),
-                    onClick     = { navController.navigate("vault") }
+                    onClick     = { navController.navigate("vault") {
+                        popUpTo("home") { saveState = true }
+                        launchSingleTop = true
+                        restoreState    = true
+                    }}
                 )
                 AuraFeatureCard(
                     modifier    = Modifier.weight(1f),
