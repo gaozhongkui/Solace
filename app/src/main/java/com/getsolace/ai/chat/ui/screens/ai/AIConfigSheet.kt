@@ -395,14 +395,3 @@ fun StylePreviewBox(styleId: String) {
         }
     }
 }
-
-// ─── Preview ──────────────────────────────────────────────────────────────────
-
-@Preview(showBackground = true, backgroundColor = 0xFF000000, heightDp = 800)
-@Composable
-private fun AIConfigSheetPreview() {
-    AIConfigSheet(
-        vm        = AIViewModel(),
-        onDismiss = {}
-    )
-}

@@ -1,18 +1,29 @@
 package com.getsolace.ai.chat.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.getsolace.ai.chat.data.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.File
 import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 
 /**
  * ViewModel for AI image creation.
  */
-class AIViewModel : ViewModel() {
+class AIViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── UI State ──────────────────────────────────────────────────────────────
 
@@ -58,12 +69,14 @@ class AIViewModel : ViewModel() {
         _progress.value = 0f
         _generatedImageUrl.value = null
 
+        val cacheDir = getApplication<Application>().cacheDir
+
         viewModelScope.launch {
             try {
-                val startTime = System.currentTimeMillis()
-                val minDurationMs = 3500L  // 最少展示 3.5s 进度动画
+                val startTime    = System.currentTimeMillis()
+                val minDuration  = 3500L
 
-                // Progress animation runs until manually cancelled
+                // Progress animation — hold at 0.92 until result ready
                 val progressJob = launch {
                     var p = 0f
                     while (p < 0.92f) {
@@ -71,42 +84,54 @@ class AIViewModel : ViewModel() {
                         p = minOf(p + (0.015f + Math.random().toFloat() * 0.03f), 0.92f)
                         _progress.value = p
                     }
-                    // Hold at 0.92 until API result is ready
                 }
 
                 val fullPrompt = buildFullPrompt()
-                val model     = PollinationsApi.modelForStyle(_selectedStyle.value.id)
-                val imageUrl  = PollinationsApi.generateImage(
-                    prompt = fullPrompt,
-                    width  = _selectedRatio.value.apiWidth(),
-                    height = _selectedRatio.value.apiHeight(),
-                    model  = model
-                )
+                val model      = PollinationsApi.modelForStyle(_selectedStyle.value.id)
+                val width      = _selectedRatio.value.apiWidth()
+                val height     = _selectedRatio.value.apiHeight()
 
-                // Ensure minimum display time before showing result
-                val elapsed = System.currentTimeMillis() - startTime
-                if (elapsed < minDurationMs) {
-                    delay(minDurationMs - elapsed)
+                // ── 主线：Pollinations ─────────────────────────────────────
+                val localPath = try {
+                    PollinationsApi.generateImage(
+                        cacheDir = cacheDir,
+                        prompt   = fullPrompt,
+                        width    = width,
+                        height   = height,
+                        model    = model
+                    )
+                } catch (primary: Exception) {
+                    Log.w("AIViewModel", "Pollinations failed, trying HuggingFace: ${primary.message}")
+                    // ── 兜底：HuggingFace ──────────────────────────────────
+                    HuggingFaceApi.generateImage(
+                        cacheDir = cacheDir,
+                        prompt   = fullPrompt
+                    )
                 }
+
+                // Ensure minimum animation time
+                val elapsed = System.currentTimeMillis() - startTime
+                if (elapsed < minDuration) delay(minDuration - elapsed)
 
                 progressJob.cancel()
                 _progress.value = 1f
                 delay(400)
 
-                _generatedImageUrl.value = imageUrl
+                _generatedImageUrl.value = localPath
                 _step.value = CreateAIStep.RESULT
 
-                // Save to history
-                val record = AIGeneratedImage(
-                    prompt      = promptText,
-                    styleTitle  = _selectedStyle.value.title,
-                    imageUrl    = imageUrl,
-                    aspectRatio = _selectedRatio.value.label
+                AIImageStore.saveImage(
+                    AIGeneratedImage(
+                        prompt      = promptText,
+                        styleTitle  = _selectedStyle.value.title,
+                        imageUrl    = localPath,
+                        aspectRatio = _selectedRatio.value.label
+                    )
                 )
-                AIImageStore.saveImage(record)
 
             } catch (e: Exception) {
-                _errorMessage.value = "生成失败：${e.message}"
+                Log.e("AIViewModel", "Both APIs failed", e)
+                _errorMessage.value = "生成失败，请稍后重试"
                 _step.value = CreateAIStep.CONFIG
             } finally {
                 _isLoading.value = false
@@ -129,33 +154,118 @@ class AIViewModel : ViewModel() {
     }
 }
 
-// ─── Pollinations API (image.pollinations.ai public endpoint) ─────────────────
+// ─── Shared OkHttp client ─────────────────────────────────────────────────────
+
+private val sharedHttpClient: OkHttpClient by lazy {
+    OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)   // image gen can be slow
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
+}
+
+// ─── Pollinations API ─────────────────────────────────────────────────────────
 //
-// Uses the standard Hugging Face Pollinations API (image.pollinations.ai).
-// No API key required. Supported models: flux, turbo, flux-realism, flux-anime,
-// flux-3d, any-dark, etc.
-// Style → model mapping:
-//   davinci → flux-realism, turbo → turbo, seedream → flux-anime,
-//   3d → flux-3d, imagineart → any-dark, others → flux
+// image.pollinations.ai — free public endpoint, no key needed.
+// Actually downloads the image bytes to a local cache file so failures
+// are detected in the ViewModel rather than silently in Coil.
+//
+// Style → model: davinci→flux-realism, turbo→turbo, seedream→flux-anime,
+//                3d→flux-3d, imagineart→any-dark, others→flux
 
 object PollinationsApi {
 
     private const val BASE_URL = "https://image.pollinations.ai/prompt"
 
-    // Map style id to Pollinations model name
     fun modelForStyle(styleId: String): String = when (styleId) {
-        "davinci"     -> "flux-realism"
-        "turbo"       -> "turbo"
-        "seedream"    -> "flux-anime"
-        "3d"          -> "flux-3d"
-        "imagineart"  -> "any-dark"
-        else          -> "flux"
+        "davinci"    -> "flux-realism"
+        "turbo"      -> "turbo"
+        "seedream"   -> "flux-anime"
+        "3d"         -> "flux-3d"
+        "imagineart" -> "any-dark"
+        else         -> "flux"
     }
 
-    suspend fun generateImage(prompt: String, width: Int, height: Int, model: String = "flux"): String {
+    /**
+     * Generates an image via Pollinations, downloads the bytes, saves to
+     * [cacheDir] and returns a `file://` URI string for Coil to load.
+     * Throws on any network or HTTP error.
+     */
+    suspend fun generateImage(
+        cacheDir : File,
+        prompt   : String,
+        width    : Int,
+        height   : Int,
+        model    : String = "flux"
+    ): String = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(prompt, "UTF-8")
-        val seed = (Math.random() * 100000).toInt()
-        // Use image.pollinations.ai public endpoint (Hugging Face Pollinations API)
-        return "$BASE_URL/$encoded?model=$model&width=$width&height=$height&seed=$seed&nologo=true&enhance=true"
+        val seed    = (Math.random() * 100000).toInt()
+        val url     = "$BASE_URL/$encoded?model=$model&width=$width&height=$height" +
+                      "&seed=$seed&nologo=true&enhance=true"
+
+        val request  = Request.Builder().url(url).get().build()
+        val response = sharedHttpClient.newCall(request).execute()
+
+        if (!response.isSuccessful) {
+            throw Exception("Pollinations HTTP ${response.code}")
+        }
+
+        val bytes = response.body?.bytes()
+            ?: throw Exception("Pollinations empty response")
+
+        saveToCache(cacheDir, bytes, prefix = "poll")
     }
+}
+
+// ─── HuggingFace Inference API ────────────────────────────────────────────────
+//
+// Uses FLUX.1-schnell (fast, free tier) as the fallback model.
+// POST {"inputs": "<prompt>"} → binary PNG response.
+
+object HuggingFaceApi {
+
+    private const val TOKEN = "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"
+    private const val MODEL = "black-forest-labs/FLUX.1-schnell"
+    // api-inference.huggingface.co is deprecated → use router.huggingface.co
+    private const val ENDPOINT =
+        "https://router.huggingface.co/hf-inference/models/$MODEL"
+
+    /**
+     * Generates an image via HuggingFace Inference API, saves to [cacheDir]
+     * and returns a `file://` URI string for Coil to load.
+     * Throws on network or HTTP error.
+     */
+    suspend fun generateImage(
+        cacheDir : File,
+        prompt   : String
+    ): String = withContext(Dispatchers.IO) {
+        val json    = JSONObject().put("inputs", prompt).toString()
+        val body    = json.toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url(ENDPOINT)
+            .addHeader("Authorization", "Bearer $TOKEN")
+            .post(body)
+            .build()
+
+        val response = sharedHttpClient.newCall(request).execute()
+
+        if (!response.isSuccessful) {
+            val errBody = response.body?.string() ?: ""
+            throw Exception("HuggingFace HTTP ${response.code}: $errBody")
+        }
+
+        val bytes = response.body?.bytes()
+            ?: throw Exception("HuggingFace empty response")
+
+        saveToCache(cacheDir, bytes, prefix = "hf")
+    }
+}
+
+// ─── Helper: save bytes to cache file, return file:// URI ────────────────────
+
+private fun saveToCache(cacheDir: File, bytes: ByteArray, prefix: String): String {
+    val dir  = File(cacheDir, "ai_images").also { it.mkdirs() }
+    val file = File(dir, "${prefix}_${System.currentTimeMillis()}.jpg")
+    file.writeBytes(bytes)
+    return file.absolutePath  // Coil loads absolute paths directly
 }
