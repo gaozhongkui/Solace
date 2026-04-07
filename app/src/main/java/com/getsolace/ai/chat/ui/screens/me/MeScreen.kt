@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -401,7 +402,7 @@ fun AIHistoryCard(image: AIGeneratedImage, onClick: () -> Unit) {
             .clickable(onClick = onClick)
     ) {
         SolaceAsyncImage(
-            model              = if (image.imageUrl.isNotBlank()) image.imageUrl else null,
+            model              = image.imageUrl.ifBlank { null },
             contentDescription = image.prompt,
             contentScale       = ContentScale.Crop,
             modifier           = Modifier.fillMaxSize(),
@@ -575,7 +576,8 @@ fun AIImageDetailOverlay(
                         Spacer(Modifier.height(12.dp))
                         Text("提示词", fontSize = 12.sp, color = VioletBright, fontWeight = FontWeight.Medium)
                         Spacer(Modifier.height(6.dp))
-                        Text(image.prompt, fontSize = 13.sp, color = TextPri)
+                        Text(image.prompt, fontSize = 13.sp, color = TextPri, maxLines = 6,
+                            overflow = TextOverflow.Ellipsis)
                     }
                 }
             }

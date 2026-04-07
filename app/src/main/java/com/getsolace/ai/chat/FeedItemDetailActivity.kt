@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -239,6 +240,8 @@ private fun FeedItemDetailScreen(
                             Spacer(Modifier.height(AppSpacing.xs))
                             Text(
                                 prompt,
+                                maxLines = 6,
+                                overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary)
                             )
                             Spacer(Modifier.height(AppSpacing.md))

@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.getsolace.ai.chat.data.AIImageStyle
@@ -50,99 +51,110 @@ fun AIConfigSheet(vm: AIViewModel, onDismiss: () -> Unit) {
             shape  = RoundedCornerShape(topStart = AppRadius.xl, topEnd = AppRadius.xl),
             colors = CardDefaults.cardColors(containerColor = BgDeepAlt)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(AppSpacing.lg)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Box(
+            Column(modifier = Modifier.fillMaxSize()) {
+                // ── 可滚动内容区 ──────────────────────────────────────────
+                Column(
                     modifier = Modifier
-                        .width(40.dp)
-                        .height(4.dp)
-                        .clip(CircleShape)
-                        .background(TextTertiary)
-                        .align(Alignment.CenterHorizontally)
-                )
-                Spacer(Modifier.height(AppSpacing.lg))
-
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "AI 创作",
-                        style    = MaterialTheme.typography.headlineSmall.copy(
-                            color = TextPrimary, fontWeight = FontWeight.Bold
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, "关闭", tint = TextSecondary)
-                    }
-                }
-
-                Spacer(Modifier.height(AppSpacing.xl))
-
-                // 提示词输入
-                Text("创作提示词", style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary))
-                Spacer(Modifier.height(AppSpacing.sm))
-                OutlinedTextField(
-                    value         = prompt,
-                    onValueChange = vm::setPrompt,
-                    placeholder   = { Text("描述你想要的画面…", color = TextDisabled) },
-                    modifier      = Modifier.fillMaxWidth().height(120.dp),
-                    colors        = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor   = AccentPrimary,
-                        unfocusedBorderColor = DividerColor,
-                        focusedTextColor     = TextPrimary,
-                        unfocusedTextColor   = TextPrimary,
-                        cursorColor          = AccentPrimary
-                    ),
-                    shape = RoundedCornerShape(AppRadius.sm)
-                )
-
-                Spacer(Modifier.height(AppSpacing.xl))
-
-                // 风格选择
-                Text("风格选择", style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary))
-                Spacer(Modifier.height(AppSpacing.sm))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
-                    items(AIImageStyles) { style ->
-                        StyleOptionCard(
-                            style      = style,
-                            isSelected = style.id == selectedStyle.id,
-                            onClick    = { vm.selectStyle(style) }
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(AppSpacing.xl))
-
-                // 画面比例
-                Text("画面比例", style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary))
-                Spacer(Modifier.height(AppSpacing.sm))
-                Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
-                    AspectRatioOptions.forEach { ratio ->
-                        AspectRatioButton(
-                            option     = ratio,
-                            isSelected = ratio.id == selectedRatio.id,
-                            onClick    = { vm.selectRatio(ratio) },
-                            modifier   = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(AppSpacing.xxxl))
-
-                Button(
-                    onClick  = { onDismiss(); vm.startGeneration() },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape    = RoundedCornerShape(AppRadius.lg),
-                    colors   = ButtonDefaults.buttonColors(containerColor = AccentPrimary)
+                        .weight(1f)
+                        .padding(horizontal = AppSpacing.lg)
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    Icon(Icons.Default.AutoAwesome, null)
-                    Spacer(Modifier.width(AppSpacing.sm))
-                    Text("开始生成", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    Spacer(Modifier.height(AppSpacing.sm))
+                    Box(
+                        modifier = Modifier
+                            .width(40.dp)
+                            .height(4.dp)
+                            .clip(CircleShape)
+                            .background(TextTertiary)
+                            .align(Alignment.CenterHorizontally)
+                    )
+                    Spacer(Modifier.height(AppSpacing.lg))
+
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "AI 创作",
+                            style    = MaterialTheme.typography.headlineSmall.copy(
+                                color = TextPrimary, fontWeight = FontWeight.Bold
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, "关闭", tint = TextSecondary)
+                        }
+                    }
+
+                    Spacer(Modifier.height(AppSpacing.xl))
+
+                    // 提示词输入
+                    Text("创作提示词", style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary))
+                    Spacer(Modifier.height(AppSpacing.sm))
+                    OutlinedTextField(
+                        value         = prompt,
+                        onValueChange = vm::setPrompt,
+                        placeholder   = { Text("描述你想要的画面…", color = TextDisabled) },
+                        modifier      = Modifier.fillMaxWidth().height(120.dp),
+                        colors        = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor   = AccentPrimary,
+                            unfocusedBorderColor = DividerColor,
+                            focusedTextColor     = TextPrimary,
+                            unfocusedTextColor   = TextPrimary,
+                            cursorColor          = AccentPrimary
+                        ),
+                        shape = RoundedCornerShape(AppRadius.sm)
+                    )
+
+                    Spacer(Modifier.height(AppSpacing.xl))
+
+                    // 风格选择
+                    Text("风格选择", style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary))
+                    Spacer(Modifier.height(AppSpacing.sm))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+                        items(AIImageStyles) { style ->
+                            StyleOptionCard(
+                                style      = style,
+                                isSelected = style.id == selectedStyle.id,
+                                onClick    = { vm.selectStyle(style) }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(AppSpacing.sm))
                 }
-                Spacer(Modifier.height(AppSpacing.lg))
+
+                // ── 固定底部：画面比例 + 开始生成 ────────────────────────
+                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AppSpacing.lg)
+                        .padding(top = AppSpacing.lg, bottom = AppSpacing.xl)
+                ) {
+                    // 画面比例
+                    Text("画面比例", style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary))
+                    Spacer(Modifier.height(AppSpacing.sm))
+                    Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+                        AspectRatioOptions.forEach { ratio ->
+                            AspectRatioButton(
+                                option     = ratio,
+                                isSelected = ratio.id == selectedRatio.id,
+                                onClick    = { vm.selectRatio(ratio) },
+                                modifier   = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(AppSpacing.lg))
+
+                    Button(
+                        onClick  = { onDismiss(); vm.startGeneration() },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape    = RoundedCornerShape(AppRadius.lg),
+                        colors   = ButtonDefaults.buttonColors(containerColor = AccentPrimary)
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, null)
+                        Spacer(Modifier.width(AppSpacing.sm))
+                        Text("开始生成", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    }
+                }
             }
         }
     }
@@ -219,4 +231,15 @@ fun AspectRatioButton(
             )
         )
     }
+}
+
+// ─── Preview ──────────────────────────────────────────────────────────────────
+
+@Preview(showBackground = true, backgroundColor = 0xFF000000, heightDp = 800)
+@Composable
+private fun AIConfigSheetPreview() {
+    AIConfigSheet(
+        vm        = AIViewModel(),
+        onDismiss = {}
+    )
 }

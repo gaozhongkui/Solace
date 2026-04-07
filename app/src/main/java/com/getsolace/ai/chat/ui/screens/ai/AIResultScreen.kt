@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
@@ -80,7 +81,8 @@ fun AIResultScreen(imageUrl: String, vm: AIViewModel) {
                 Column(modifier = Modifier.padding(AppSpacing.lg)) {
                     Text("提示词", style = MaterialTheme.typography.labelMedium.copy(color = AccentPrimary))
                     Spacer(Modifier.height(AppSpacing.xs))
-                    Text(prompt, style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                    Text(prompt, maxLines = 6,
+                        overflow = TextOverflow.Ellipsis,style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                     Spacer(Modifier.height(AppSpacing.sm))
                     Text("风格: ${style.title}", style = MaterialTheme.typography.labelSmall.copy(color = TextTertiary))
                 }
