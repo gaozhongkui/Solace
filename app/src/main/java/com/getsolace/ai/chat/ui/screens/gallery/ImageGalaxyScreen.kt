@@ -53,7 +53,7 @@ import kotlin.math.*
 import kotlin.random.Random
 
 // ─────────────────────────────────────────
-// 1. 数据模型与完整枚举
+// 1. 数据模型与枚举
 // ─────────────────────────────────────────
 
 private data class Vec3(val x: Double, val y: Double, val z: Double)
@@ -69,7 +69,7 @@ enum class GalaxyShape(val displayName: String) {
 }
 
 // ─────────────────────────────────────────
-// 2. 3D 引擎核心
+// 2. 3D 引擎计算
 // ─────────────────────────────────────────
 
 private fun rotate(p: Vec3, rotX: Double, rotY: Double): Vec3 {
@@ -136,7 +136,7 @@ private fun positionFor(p: ImageParticle, shape: GalaxyShape, total: Int, time: 
 }
 
 // ─────────────────────────────────────────
-// 3. 优化后的渲染辅助
+// 3. 优化后的核心渲染函数
 // ─────────────────────────────────────────
 
 private fun heartPath(cx: Float, cy: Float, size: Float): Path = Path().apply {
@@ -150,32 +150,50 @@ private fun heartPath(cx: Float, cy: Float, size: Float): Path = Path().apply {
     close()
 }
 
+/**
+ * 带有景深感知(DOF)的粒子渲染
+ */
 private fun DrawScope.drawGalaxyParticle(
     p: ImageParticle, cx: Float, cy: Float, size: Float,
-    alpha: Float, glowColor: Color, shape: GalaxyShape
+    alpha: Float, glowColor: Color, shape: GalaxyShape,
+    zDepth: Float // 0.0 (最远) -> 1.0 (最近)
 ) {
     val half = size / 2f
     val path = if (shape == GalaxyShape.HEART) heartPath(cx, cy, half)
     else Path().apply { addOval(Rect(cx - half, cy - half, cx + half, cy + half)) }
 
-    if (alpha > 0.5f) {
-        drawPath(path, glowColor.copy(alpha = 0.3f * alpha), style = Stroke(width = 6f))
-        drawPath(path, Color.White.copy(alpha = 0.5f * alpha), style = Stroke(width = 1.2f))
+    // 核心优化：只有距离镜头较近(zDepth > 0.6)的粒子才绘制清晰的边缘和发光
+    if (zDepth > 0.6f) {
+        val focusEffect = ((zDepth - 0.6f) * 2.5f).coerceIn(0f, 1f)
+        drawPath(path, glowColor.copy(alpha = 0.4f * alpha * focusEffect), style = Stroke(width = 6f))
+        drawPath(path, Color.White.copy(alpha = 0.5f * alpha * focusEffect), style = Stroke(width = 1.2f))
     }
 
-    drawPath(path, color = Color.Black)
+    // 绘制底部遮罩，避免重叠处的透明度叠加得过于刺眼
+    drawPath(path, color = Color.Black.copy(alpha = alpha))
+
     clipPath(path) {
         if (p.bitmap != null) {
-            drawImage(p.bitmap, dstOffset = IntOffset((cx - half).toInt(), (cy - half).toInt()), dstSize = IntSize(size.toInt(), size.toInt()), alpha = alpha)
+            // 核心优化：模拟光影压暗。远处的粒子亮度降低
+            val brightness = (0.35f + 0.65f * zDepth).coerceIn(0f, 1f)
+            drawImage(
+                p.bitmap,
+                dstOffset = IntOffset((cx - half).toInt(), (cy - half).toInt()),
+                dstSize = IntSize(size.toInt(), size.toInt()),
+                alpha = alpha,
+                colorFilter = ColorFilter.tint(Color.Black.copy(alpha = 1f - brightness), BlendMode.SrcOver)
+            )
         } else {
             drawRect(glowColor.copy(0.2f), alpha = alpha)
         }
     }
-    drawPath(path, Color.White.copy(alpha = 0.15f * alpha), style = Stroke(width = 1.0f))
+
+    // 远处的边框线弱化
+    drawPath(path, Color.White.copy(alpha = 0.15f * alpha * zDepth), style = Stroke(width = 1.0f))
 }
 
 // ─────────────────────────────────────────
-// 4. 主组件
+// 4. UI 界面
 // ─────────────────────────────────────────
 
 @Composable
@@ -218,9 +236,7 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
     val gestureController = remember {
         HandGestureController(
             context = context,
-            onZoom = { factor ->
-                zoomScale = (zoomScale * factor).coerceIn(0.5f, 3.5f)
-            },
+            onZoom = { factor -> zoomScale = (zoomScale * factor).coerceIn(0.5f, 3.5f) },
             onTap = { nx, ny ->
                 if (canvasSize.width > 0f) {
                     val tapOffset = Offset(nx * canvasSize.width, ny * canvasSize.height)
@@ -229,10 +245,7 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
                     var nearest: ImageParticle? = null
                     var minDist = Float.MAX_VALUE
                     particles.forEach { p ->
-                        val pos = rotate(
-                            positionFor(p, currentShape, particles.size, animationTime, canvasSize.width, canvasSize.height),
-                            rotX, rotY
-                        )
+                        val pos = rotate(positionFor(p, currentShape, particles.size, animationTime, canvasSize.width, canvasSize.height), rotX, rotY)
                         val proj = project(pos, canvasSize.width, canvasSize.height, zoomScale)
                         val dist = sqrt((proj.x - tapOffset.x).pow(2) + (proj.y - tapOffset.y).pow(2))
                         if (dist < 100f * proj.scale && dist < minDist) { minDist = dist; nearest = p }
@@ -249,11 +262,7 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
     }
 
     LaunchedEffect(hasCameraPermission) {
-        android.util.Log.d("GalaxyScreen", "LaunchedEffect: hasCameraPermission=$hasCameraPermission")
-        if (!hasCameraPermission) {
-            android.util.Log.w("GalaxyScreen", "相机权限未授予，跳过初始化")
-            return@LaunchedEffect
-        }
+        if (!hasCameraPermission) return@LaunchedEffect
         withContext(Dispatchers.IO) { gestureController.init() }
         @Suppress("DEPRECATION")
         val analysis = ImageAnalysis.Builder()
@@ -266,27 +275,20 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
             val provider = withContext(Dispatchers.IO) { ProcessCameraProvider.getInstance(context).get() }
             provider.unbindAll()
             provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
-            android.util.Log.d("GalaxyScreen", "CameraX 绑定成功 ✓ 前置摄像头已启动")
         } catch (e: Exception) {
-            android.util.Log.e("GalaxyScreen", "CameraX 绑定失败 ✗ ${e.message}")
+            android.util.Log.e("GalaxyScreen", "CameraX Error: ${e.message}")
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            gestureController.close()
-            cameraExecutor.shutdown()
-        }
-    }
+    DisposableEffect(Unit) { onDispose { gestureController.close(); cameraExecutor.shutdown() } }
 
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) cameraPermLauncher.launch(Manifest.permission.CAMERA)
-
         val rng = Random(System.nanoTime())
         stars = (0 until 180).map { StarParticle(rng.nextFloat(), rng.nextFloat(), 1f + rng.nextFloat() * 2.5f, 0.2f + rng.nextFloat() * 0.7f, rng.nextFloat() * 10f) }
         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
         if (ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED) {
-            val loaded = loadGalleryImages(context, 36)
+            val loaded = loadGalleryImages(context, 40)
             particles = loaded.mapIndexed { i, (id, bmp) -> ImageParticle(id, bmp?.asImageBitmap(), i, abs(id.hashCode())) }
         }
     }
@@ -319,15 +321,14 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
                                 val pos = rotate(positionFor(p, currentShape, particles.size, animationTime, canvasSize.width, canvasSize.height), rotX, rotY)
                                 val proj = project(pos, canvasSize.width, canvasSize.height, zoomScale)
                                 val dist = sqrt((proj.x - offset.x).pow(2) + (proj.y - offset.y).pow(2))
-                                if (dist < (100f * proj.scale) && dist < minDist) {
-                                    minDist = dist; nearest = p
-                                }
+                                if (dist < (100f * proj.scale) && dist < minDist) { minDist = dist; nearest = p }
                             }
                             selectedParticle = nearest
                         }
                     )
                 }
         ) {
+            // 背景渐变
             drawRect(Color(0xFF010103))
             drawRect(Brush.radialGradient(0f to Color(0xFF0D0D1E), 1f to Color(0xFF010103), center = Offset(size.width/2 + dragX.value * 0.05f, size.height/2 + dragY.value * 0.05f), radius = size.width * 1.5f))
             stars.forEach { star ->
@@ -338,14 +339,26 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
             if (particles.isNotEmpty()) {
                 val rotY = animationTime * 0.12 + dragX.value / 180.0
                 val rotX = animationTime * 0.08 + dragY.value / 180.0
-                particles.map { p ->
+
+                // 核心优化：画家算法。由远及近排序绘制。
+                val sortedList = particles.map { p ->
                     p to rotate(positionFor(p, currentShape, particles.size, animationTime, size.width, size.height), rotX, rotY)
-                }.sortedByDescending { it.second.z }.forEach { (p, rotated) ->
+                }.sortedBy { it.second.z } // z 轴越小越远
+
+                sortedList.forEach { (p, rotated) ->
                     val proj = project(rotated, size.width, size.height, zoomScale)
-                    val pSize = (48f + 42f * proj.scale) * (1f + 0.04f * sin(animationTime * 2.5 + p.seed % 10).toFloat())
-                    // 景深：前景清晰，背景淡出
-                    val alpha = (proj.scale * proj.scale).coerceIn(0.08f, 1f)
-                    drawGalaxyParticle(p, proj.x, proj.y, pSize, alpha, glowColor, currentShape)
+
+                    // 核心优化：计算深度归一化值 (0.0=远, 1.0=近)
+                    // 映射范围取决于球体半径(420)，我们大致做一个归一化
+                    val zNormalized = ((rotated.z + 420.0) / 840.0).coerceIn(0.0, 1.0).toFloat()
+
+                    // 核心优化：非线性透明度。远处的粒子平方倍淡出。
+                    val alpha = (zNormalized * zNormalized).coerceIn(0.08f, 1f)
+
+                    val baseSize = 48f + 42f * proj.scale
+                    val pSize = baseSize * (0.65f + 0.35f * zNormalized) * (1f + 0.04f * sin(animationTime * 2.5 + p.seed % 10).toFloat())
+
+                    drawGalaxyParticle(p, proj.x, proj.y, pSize, alpha, glowColor, currentShape, zNormalized)
                 }
             }
 
@@ -355,25 +368,14 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
             }
         }
 
+        // 顶层UI控件
         Box(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            // 返回按钮（左上角）
             Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.Black.copy(alpha = 0.4f))
-                    .clickable { navController?.popBackStack() }
-                    .padding(8.dp)
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.4f))
+                    .clickable { navController?.popBackStack() }.padding(8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "返回",
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = Color.White, modifier = Modifier.size(22.dp))
             }
-            // 形状名称（右上角）
             Column(modifier = Modifier.align(Alignment.TopEnd).padding(20.dp), horizontalAlignment = Alignment.End) {
                 Text(text = currentShape.displayName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = 2.sp)
                 Box(Modifier.height(2.dp).width(30.dp).background(glowColor))
@@ -383,6 +385,7 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
             }
         }
 
+        // 选中图片预览
         AnimatedVisibility(visible = selectedParticle != null, enter = fadeIn() + scaleIn(initialScale = 0.9f), exit = fadeOut() + scaleOut(targetScale = 0.9f)) {
             val p = selectedParticle ?: return@AnimatedVisibility
             Box(Modifier.fillMaxSize().blur(15.dp).background(Color.Black.copy(0.7f)).pointerInput(Unit) { detectTapGestures { selectedParticle = null } })
