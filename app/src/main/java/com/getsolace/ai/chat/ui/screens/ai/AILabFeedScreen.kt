@@ -1,37 +1,26 @@
 package com.getsolace.ai.chat.ui.screens.ai
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.getsolace.ai.chat.CreateAIActivity
+import com.getsolace.ai.chat.FeedItemDetailActivity
 import com.getsolace.ai.chat.data.AIGeneratedImage
 import com.getsolace.ai.chat.data.FeedItem
 import com.getsolace.ai.chat.data.UnifiedFeedManager
@@ -47,8 +36,7 @@ fun AILabFeedScreen(vm: AIViewModel) {
     val feedItems     by UnifiedFeedManager.items.collectAsStateWithLifecycle()
     val isFeedLoading by UnifiedFeedManager.isLoading.collectAsStateWithLifecycle()
     val isLoadingMore by UnifiedFeedManager.isLoadingMore.collectAsStateWithLifecycle()
-    var showConfig    by remember { mutableStateOf(false) }
-    var selectedItem  by remember { mutableStateOf<FeedItem?>(null) }
+    var showConfig by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -125,7 +113,17 @@ fun AILabFeedScreen(vm: AIViewModel) {
                     items(feedItems, key = { it.id }) { feedItem ->
                         FeedImageCard(
                             item    = feedItem,
-                            onClick = { selectedItem = feedItem }
+                            onClick = {
+                                context.startActivity(
+                                    FeedItemDetailActivity.newIntent(
+                                        context  = context,
+                                        imageUrl = feedItem.imageUrl,
+                                        prompt   = feedItem.prompt,
+                                        width    = feedItem.width,
+                                        height   = feedItem.height
+                                    )
+                                )
+                            }
                         )
                     }
 
@@ -160,18 +158,6 @@ fun AILabFeedScreen(vm: AIViewModel) {
             Icon(Icons.Default.AutoAwesome, null)
             Spacer(Modifier.width(AppSpacing.sm))
             Text("AI 创作")
-        }
-
-        // ── 图片详情遮罩 ──────────────────────────────────────────────────────
-        selectedItem?.let { item ->
-            FeedItemDetailOverlay(
-                item        = item,
-                onDismiss   = { selectedItem = null },
-                onUsePrompt = { prompt ->
-                    selectedItem = null
-                    context.startActivity(CreateAIActivity.newIntent(context, prompt))
-                }
-            )
         }
 
         if (showConfig) {
@@ -223,149 +209,6 @@ fun FeedImageCard(item: FeedItem, onClick: () -> Unit) {
     }
 }
 
-// ─── Feed Item Detail Overlay ─────────────────────────────────────────────────
-
-@Composable
-fun FeedItemDetailOverlay(
-    item: FeedItem,
-    onDismiss: () -> Unit,
-    onUsePrompt: (String) -> Unit
-) {
-    var scale  by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    val isZoomed = scale > 1.05f
-
-    // 缩放/平移状态
-    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-        scale  = (scale * zoomChange).coerceIn(1f, 5f)
-        offset = if (scale > 1f) offset + panChange else Offset.Zero
-    }
-
-    // 缩放中按返回键 → 先复位，否则关闭
-    BackHandler(enabled = true) {
-        if (isZoomed) {
-            scale = 1f; offset = Offset.Zero
-        } else {
-            onDismiss()
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-
-            // ── 顶部栏（避开状态栏）─────────────────────────────────────────
-            Row(
-                modifier          = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = {
-                    if (isZoomed) { scale = 1f; offset = Offset.Zero } else onDismiss()
-                }) {
-                    Icon(Icons.Default.Close, "关闭", tint = TextPrimary)
-                }
-                Text(
-                    "图片详情",
-                    style     = MaterialTheme.typography.titleMedium.copy(
-                        color      = TextPrimary,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier  = Modifier.weight(1f),
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.width(48.dp))
-            }
-
-            // ── 可缩放图片区域 ────────────────────────────────────────────────
-            Box(
-                modifier          = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clip(RoundedCornerShape(0.dp))          // 裁剪溢出部分
-                    .transformable(state = transformState)   // 双指缩放 + 平移
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onDoubleTap = {
-                                // 双击切换缩放
-                                if (isZoomed) {
-                                    scale = 1f; offset = Offset.Zero
-                                } else {
-                                    scale = 2.5f
-                                }
-                            }
-                        )
-                    },
-                contentAlignment  = Alignment.Center
-            ) {
-                SolaceAsyncImage(
-                    model              = item.imageUrl,
-                    contentDescription = item.prompt,
-                    contentScale       = ContentScale.Fit,
-                    modifier           = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX       = scale
-                            scaleY       = scale
-                            translationX = offset.x
-                            translationY = offset.y
-                        }
-                )
-            }
-
-            // ── 底部提示词卡（缩放时隐藏）────────────────────────────────────
-            AnimatedVisibility(
-                visible = !isZoomed,
-                enter   = fadeIn(),
-                exit    = fadeOut()
-            ) {
-                Column {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.md),
-                        shape    = RoundedCornerShape(AppRadius.md),
-                        colors   = CardDefaults.cardColors(containerColor = CardBg)
-                    ) {
-                        Column(modifier = Modifier.padding(AppSpacing.lg)) {
-                            Text(
-                                "提示词",
-                                style = MaterialTheme.typography.labelMedium.copy(color = AccentPrimary)
-                            )
-                            Spacer(Modifier.height(AppSpacing.xs))
-                            Text(
-                                item.prompt,
-                                style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary)
-                            )
-                            Spacer(Modifier.height(AppSpacing.md))
-                            Button(
-                                onClick  = { onUsePrompt(item.prompt) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape    = RoundedCornerShape(AppRadius.sm),
-                                colors   = ButtonDefaults.buttonColors(containerColor = AccentPrimary)
-                            ) {
-                                Icon(Icons.Default.AutoAwesome, null)
-                                Spacer(Modifier.width(AppSpacing.sm))
-                                Text("用此提示词创作")
-                            }
-                        }
-                    }
-                    Spacer(
-                        Modifier
-                            .navigationBarsPadding()
-                            .height(AppSpacing.md)
-                    )
-                }
-            }
-        }
-    }
-}
-
 // ─── My History Card ──────────────────────────────────────────────────────────
 
 @Composable
@@ -378,7 +221,7 @@ fun AIFeedCard(image: AIGeneratedImage) {
             .background(CardBg)
     ) {
         SolaceAsyncImage(
-            model              = if (image.imageUrl.isNotBlank()) image.imageUrl else null,
+            model              = image.imageUrl.ifBlank { null },
             contentDescription = image.prompt,
             contentScale       = ContentScale.Crop,
             modifier           = Modifier.fillMaxSize(),
