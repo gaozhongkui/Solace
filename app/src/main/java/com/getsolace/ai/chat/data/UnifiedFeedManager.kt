@@ -149,7 +149,7 @@ object UnifiedFeedManager {
 
             FeedItem(
                 id       = item.optInt("id", 0).toString(),
-                imageUrl = imageUrl,
+                imageUrl = civitaiThumbnailUrl(imageUrl, width),
                 prompt   = prompt,
                 width    = width,
                 height   = height,
@@ -190,6 +190,24 @@ object UnifiedFeedManager {
                 }
             }
         }
+    }
+
+    // ── CivitAI CDN 缩略图 URL ────────────────────────────────────────────────
+    //
+    // CivitAI 使用 Cloudflare Image CDN，支持在路径中插入 width 参数：
+    // 原图: https://image.civitai.com/{hash}/filename.jpeg
+    // 缩略图: https://image.civitai.com/{hash}/width=450/filename.jpeg
+    //
+    // 限制最大 450px 宽（2 列瀑布流单列约 500px@2.5x，取略小值减少流量）
+    // 仅处理 image.civitai.com，其他 URL 原样返回
+
+    private fun civitaiThumbnailUrl(url: String, originalWidth: Int): String {
+        if (!url.contains("image.civitai.com")) return url
+        // 原图已经较小时不插入 width 参数（避免放大）
+        if (originalWidth <= 450) return url
+        val lastSlash = url.lastIndexOf('/')
+        if (lastSlash < 0) return url
+        return url.substring(0, lastSlash) + "/width=450/" + url.substring(lastSlash + 1)
     }
 
     // ── Pollinations fallback (when CivitAI unavailable) ─────────────────────

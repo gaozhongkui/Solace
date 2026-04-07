@@ -4,7 +4,12 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.getsolace.ai.chat.api.GiteeStrategyConfig
+import okhttp3.ConnectionPool
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import com.getsolace.ai.chat.api.PolicyRetrofitFactory
 import com.getsolace.ai.chat.api.StrategyCacheManager
 import com.getsolace.ai.chat.api.StrategyRepository
@@ -55,11 +60,30 @@ class SolaceApplication : Application(), ImageLoaderFactory {
     }
 
     override fun newImageLoader(): ImageLoader {
+        val okHttp = OkHttpClient.Builder()
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))  // 10个连接复用5分钟
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .build()
+
         return ImageLoader.Builder(this)
             .components {
                 add(VideoFrameDecoder.Factory())
             }
-            .crossfade(true)
+            .okHttpClient(okHttp)
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizePercent(0.30)  // 30% 内存用于图片缓存
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(200L * 1024 * 1024)  // 200 MB 磁盘缓存
+                    .build()
+            }
+            .crossfade(250)
+            .respectCacheHeaders(false)  // 忽略 CDN 的 Cache-Control，强制本地缓存
             .build()
     }
 }
