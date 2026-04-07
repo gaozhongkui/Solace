@@ -119,28 +119,33 @@ class AIViewModel : ViewModel() {
     }
 }
 
-// ─── Pollinations API (mirrors iOS PollinationsImageGenerator.swift) ──────────
+// ─── Pollinations API (image.pollinations.ai public endpoint) ─────────────────
 //
-// Uses gen.pollinations.ai (same as iOS) with API key and per-style model selection.
-// Style → model mapping mirrors iOS AIViewModel.swift:
-//   davinci → gptimage, turbo → turbo, seedream → seedream, others → flux
+// Uses the standard Hugging Face Pollinations API (image.pollinations.ai).
+// No API key required. Supported models: flux, turbo, flux-realism, flux-anime,
+// flux-3d, any-dark, etc.
+// Style → model mapping:
+//   davinci → flux-realism, turbo → turbo, seedream → flux-anime,
+//   3d → flux-3d, imagineart → any-dark, others → flux
 
 object PollinationsApi {
 
-    private const val API_KEY = "sk_UhsZmc01AcRpoVcqd9I83kLCJLGy8OS8"
+    private const val BASE_URL = "https://image.pollinations.ai/prompt"
 
-    // Map style id to Pollinations model name (mirrors iOS)
+    // Map style id to Pollinations model name
     fun modelForStyle(styleId: String): String = when (styleId) {
-        "davinci"   -> "gptimage"
-        "turbo"     -> "turbo"
-        "seedream"  -> "seedream"
-        else        -> "flux"
+        "davinci"     -> "flux-realism"
+        "turbo"       -> "turbo"
+        "seedream"    -> "flux-anime"
+        "3d"          -> "flux-3d"
+        "imagineart"  -> "any-dark"
+        else          -> "flux"
     }
 
     suspend fun generateImage(prompt: String, width: Int, height: Int, model: String = "flux"): String {
         val encoded = URLEncoder.encode(prompt, "UTF-8")
         val seed = (Math.random() * 100000).toInt()
-        // Use gen.pollinations.ai endpoint with API key (mirrors iOS)
-        return "https://gen.pollinations.ai/image/$encoded?model=$model&width=$width&height=$height&seed=$seed&nologo=true&key=$API_KEY"
+        // Use image.pollinations.ai public endpoint (Hugging Face Pollinations API)
+        return "$BASE_URL/$encoded?model=$model&width=$width&height=$height&seed=$seed&nologo=true&enhance=true"
     }
 }
