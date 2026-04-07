@@ -29,13 +29,33 @@ android {
         buildConfigField("String", "STRATEGY_TOKEN",     "\"\"")
     }
 
+    signingConfigs {
+        create("solace") {
+            keyAlias = "solace"
+            keyPassword = "solace123"
+            storeFile = file("./jks/solace.jks")
+            storePassword = "solace123"
+            storeType = "jks"
+            isV1SigningEnabled = true
+            isV2SigningEnabled = true
+        }
+    }
+
     buildTypes {
-        release {
-            isMinifyEnabled = false
+        named("release") {
+            signingConfig = signingConfigs.getByName("solace")
+            isMinifyEnabled = true
+            isDebuggable = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+
+        named("debug") {
+            signingConfig = signingConfigs.getByName("solace")
+            isMinifyEnabled = false
+            isDebuggable = true
         }
     }
     compileOptions {
@@ -54,9 +74,6 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation("androidx.core:core-splashscreen:1.0.1")
-
-    // MediaPipe Hand Gesture
-    implementation("com.google.mediapipe:tasks-vision:0.10.0")
 
     // Image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
