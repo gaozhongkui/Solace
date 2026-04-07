@@ -2,4 +2,13 @@
 <resources>
 
     <style name="Theme.Solace" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- 闪屏主题：深色背景 + 光晕图标，过渡到正式主题 -->
+    <style name="Theme.Solace.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0A0B14</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">#1E0D35</item>
+        <item name="postSplashScreenTheme">@style/Theme.Solace</item>
+    </style>
+
 </resources>

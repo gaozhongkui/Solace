@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation("androidx.core:core-splashscreen:1.0.1")
 
     // MediaPipe Hand Gesture
     implementation("com.google.mediapipe:tasks-vision:0.10.0")

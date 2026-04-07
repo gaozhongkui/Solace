@@ -99,7 +99,6 @@ enum class MainTab(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // dark 样式 = 深色背景 → 状态栏图标/文字显示为白色
         enableEdgeToEdge(
             statusBarStyle     = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
