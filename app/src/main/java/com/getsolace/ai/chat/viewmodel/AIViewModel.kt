@@ -11,7 +11,6 @@ import java.net.URLEncoder
 
 /**
  * ViewModel for AI image creation.
- * Mirrors iOS AIViewModel.swift
  */
 class AIViewModel : ViewModel() {
 
