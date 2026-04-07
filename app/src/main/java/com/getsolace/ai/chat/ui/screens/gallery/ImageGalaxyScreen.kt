@@ -23,6 +23,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -349,7 +353,25 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        Box(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            // 返回按钮（左上角）
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .clickable { navController?.popBackStack() }
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            // 形状名称（右上角）
             Column(modifier = Modifier.align(Alignment.TopEnd).padding(20.dp), horizontalAlignment = Alignment.End) {
                 Text(text = currentShape.displayName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = 2.sp)
                 Box(Modifier.height(2.dp).width(30.dp).background(glowColor))

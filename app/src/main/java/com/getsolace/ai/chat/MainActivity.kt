@@ -124,7 +124,7 @@ fun MainScaffold() {
 
     val tabs = MainTab.entries
     val rootRoutes = tabs.map { it.route }.toSet()
-    val showBottomBar = currentRoute in rootRoutes || currentRoute == "galaxy"
+    val showBottomBar = currentRoute in rootRoutes
 
     // ── 策略观察 ─────────────────────────────────────────────────────────────
     val strategy by SolaceApplication.strategyFlow.collectAsStateWithLifecycle()
