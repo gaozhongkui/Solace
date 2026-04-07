@@ -20,6 +20,9 @@ object AIImageStore {
     private val _images = MutableStateFlow<List<AIGeneratedImage>>(emptyList())
     val images: StateFlow<List<AIGeneratedImage>> = _images
 
+    private val _hasNewImage = MutableStateFlow(false)
+    val hasNewImage: StateFlow<Boolean> = _hasNewImage
+
     fun init(context: Context) {
         prefs = context.getSharedPreferences("ai_image_store", Context.MODE_PRIVATE)
         loadFromPrefs()
@@ -31,6 +34,11 @@ object AIImageStore {
         if (current.size > 200) current.dropLast(current.size - 200)
         _images.value = current
         persistToPrefs(current)
+        _hasNewImage.value = true
+    }
+
+    fun clearNewImageBadge() {
+        _hasNewImage.value = false
     }
 
     fun deleteImage(id: String) {

@@ -130,6 +130,9 @@ fun MainScaffold() {
     val strategy by SolaceApplication.strategyFlow.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    // ── Me tab 红点 ───────────────────────────────────────────────────────────
+    val hasNewImage by AIImageStore.hasNewImage.collectAsStateWithLifecycle()
+
     // 强制更新弹窗：服务端 minVersionCode > 当前 versionCode
     val needForceUpdate = strategy != null &&
             strategy!!.forceUpdate &&
@@ -183,11 +186,11 @@ fun MainScaffold() {
                     RunMateBottomBar(
                         tabs         = tabs,
                         currentRoute = currentRoute,
+                        hasNewImage  = hasNewImage,
                         onTabSelect  = { tab ->
+                            if (tab == MainTab.ME) AIImageStore.clearNewImageBadge()
                             navController.navigate(tab.route) {
                                 popUpTo(MainTab.HOME.route) {
-                                    // 点 HOME 时 inclusive=true 彻底清栈再重建，
-                                    // 解决 launchSingleTop no-op 导致无法回首页的问题
                                     inclusive = (tab == MainTab.HOME)
                                     saveState = (tab != MainTab.HOME)
                                 }
@@ -219,6 +222,7 @@ private val NavGlow    = Color(0x339B7AFF)
 fun RunMateBottomBar(
     tabs: List<MainTab>,
     currentRoute: String?,
+    hasNewImage: Boolean = false,
     onTabSelect: (MainTab) -> Unit
 ) {
     // Outer safe-area background — 延伸至系统导航栏底部
@@ -243,9 +247,10 @@ fun RunMateBottomBar(
             tabs.forEach { tab ->
                 val selected = currentRoute == tab.route
                 NavBarItem(
-                    tab      = tab,
-                    selected = selected,
-                    onClick  = { onTabSelect(tab) }
+                    tab         = tab,
+                    selected    = selected,
+                    showBadge   = tab == MainTab.ME && hasNewImage && !selected,
+                    onClick     = { onTabSelect(tab) }
                 )
             }
         }
@@ -256,6 +261,7 @@ fun RunMateBottomBar(
 private fun NavBarItem(
     tab: MainTab,
     selected: Boolean,
+    showBadge: Boolean = false,
     onClick: () -> Unit
 ) {
     Box(
@@ -270,7 +276,6 @@ private fun NavBarItem(
                         )
                     )
                     .drawBehind {
-                        // Subtle glow under selected item
                         drawCircle(
                             brush = Brush.radialGradient(
                                 colors = listOf(NavGlow, Color.Transparent),
@@ -287,7 +292,6 @@ private fun NavBarItem(
         contentAlignment = Alignment.Center
     ) {
         if (selected) {
-            // Selected: icon + label side-by-side in pill
             Row(
                 verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -306,13 +310,24 @@ private fun NavBarItem(
                 )
             }
         } else {
-            // Unselected: icon only
-            Icon(
-                imageVector        = tab.unselectedIcon,
-                contentDescription = tab.label,
-                tint               = Color(0x73FFFFFF),
-                modifier           = Modifier.size(22.dp)
-            )
+            // Unselected: icon，带红点
+            Box(contentAlignment = Alignment.TopEnd) {
+                Icon(
+                    imageVector        = tab.unselectedIcon,
+                    contentDescription = tab.label,
+                    tint               = Color(0x73FFFFFF),
+                    modifier           = Modifier.size(22.dp)
+                )
+                if (showBadge) {
+                    Box(
+                        modifier = Modifier
+                            .offset(x = 3.dp, y = (-3).dp)
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFF3B30))
+                    )
+                }
+            }
         }
     }
 }

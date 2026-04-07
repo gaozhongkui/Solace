@@ -96,7 +96,7 @@ fun CreateAIActivityScreen(vm: AIViewModel, onBack: () -> Unit) {
             when (currentStep) {
                 CreateAIStep.CONFIG     -> CreateAIConfigScreen(vm = vm, onBack = onBack)
                 CreateAIStep.PROCESSING -> AIProcessingScreen(vm = vm)
-                CreateAIStep.RESULT     -> AIResultScreen(imageUrl = generatedUrl ?: "", vm = vm)
+                CreateAIStep.RESULT     -> AIResultScreen(imageUrl = generatedUrl ?: "", vm = vm, onFinish = onBack)
             }
         }
 
