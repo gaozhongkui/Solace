@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.getsolace.ai.chat.SolaceApplication
 import com.getsolace.ai.chat.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -219,31 +220,40 @@ object PollinationsApi {
 
 // ─── HuggingFace Inference API ────────────────────────────────────────────────
 //
-// Uses FLUX.1-schnell (fast, free tier) as the fallback model.
-// POST {"inputs": "<prompt>"} → binary PNG response.
+// Token is NOT hardcoded — it is read at runtime from the remote Gitee strategy
+// config via SolaceApplication.strategyFlow (featureFlags["hf_token"]).
+// This way the token never appears in the APK and can be rotated without
+// a new app release.
+//
+// Gitee JSON example:
+//   { "featureFlags": { "hf_token": "hf_xxx..." } }
 
 object HuggingFaceApi {
 
-    private const val TOKEN = "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"
-    private const val MODEL = "black-forest-labs/FLUX.1-schnell"
-    // api-inference.huggingface.co is deprecated → use router.huggingface.co
-    private const val ENDPOINT =
-        "https://router.huggingface.co/hf-inference/models/$MODEL"
+    private const val MODEL    = "black-forest-labs/FLUX.1-schnell"
+    private const val ENDPOINT = "https://router.huggingface.co/hf-inference/models/$MODEL"
+
+    /** Read token from remote strategy config at call time. */
+    private fun resolveToken(): String =
+        SolaceApplication.strategyFlow.value?.flagString("hf_token") ?: ""
 
     /**
      * Generates an image via HuggingFace Inference API, saves to [cacheDir]
-     * and returns a `file://` URI string for Coil to load.
-     * Throws on network or HTTP error.
+     * and returns an absolute file path for Coil to load.
+     * Throws if token is missing or on any network / HTTP error.
      */
     suspend fun generateImage(
         cacheDir : File,
         prompt   : String
     ): String = withContext(Dispatchers.IO) {
+        val token = resolveToken()
+        if (token.isBlank()) throw Exception("HuggingFace token not configured")
+
         val json    = JSONObject().put("inputs", prompt).toString()
         val body    = json.toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
             .url(ENDPOINT)
-            .addHeader("Authorization", "Bearer $TOKEN")
+            .addHeader("Authorization", "Bearer $token")
             .post(body)
             .build()
 
