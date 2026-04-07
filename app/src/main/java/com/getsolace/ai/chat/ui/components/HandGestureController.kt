@@ -33,6 +33,7 @@ class HandGestureController(
     val onCursor: (nx: Float?, ny: Float?) -> Unit
 ) {
     private var landmarker: HandLandmarker? = null
+    @Volatile private var closed = false
     private var prevPinchDist = -1f
     private var smoothDist    = -1f   // EMA 平滑距离，消除 MediaPipe 抖动
     private var isPinching    = false
@@ -80,6 +81,9 @@ class HandGestureController(
      * 使用 RGBA_8888 格式，不需要 @ExperimentalGetImage（未调用 imageProxy.image）
      */
     fun processFrame(imageProxy: ImageProxy) {
+        // 已关闭则直接丢帧，避免在销毁的 native landmarker 上调用 detectAsync → SIGSEGV
+        if (closed) { imageProxy.close(); return }
+
         frameCount++
         val lm = landmarker ?: run {
             if (frameCount == 1) Log.e(TAG, "processFrame: landmarker 为 null，帧被丢弃（init() 未成功？）")
@@ -104,7 +108,10 @@ class HandGestureController(
             }
             val processed = Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, mat, false)
 
-            lm.detectAsync(BitmapImageBuilder(processed).build(), SystemClock.uptimeMillis())
+            // 二次检查：bitmap 创建耗时期间 close() 可能已被调用
+            if (!closed) {
+                lm.detectAsync(BitmapImageBuilder(processed).build(), SystemClock.uptimeMillis())
+            }
         } catch (e: Exception) {
             Log.e(TAG, "processFrame: 帧处理失败 $e")
             imageProxy.close()
@@ -172,6 +179,8 @@ class HandGestureController(
     }
 
     fun close() {
+        // 先设标志位，让 processFrame 立即停止投递新任务
+        closed = true
         landmarker?.close()
         landmarker = null
     }

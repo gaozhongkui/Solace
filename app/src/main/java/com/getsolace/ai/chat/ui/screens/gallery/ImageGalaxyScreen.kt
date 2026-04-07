@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.getsolace.ai.chat.ui.components.HandGestureController
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
 import kotlin.math.*
 import kotlin.random.Random
@@ -280,7 +281,15 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
         }
     }
 
-    DisposableEffect(Unit) { onDispose { gestureController.close(); cameraExecutor.shutdown() } }
+    DisposableEffect(Unit) {
+        onDispose {
+            // 先停止相机 executor，等待已入队的帧处理完毕，再关闭 landmarker
+            // 避免相机线程在 landmarker 已销毁后仍调用 detectAsync → SIGSEGV
+            cameraExecutor.shutdown()
+            runCatching { cameraExecutor.awaitTermination(300, TimeUnit.MILLISECONDS) }
+            gestureController.close()
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) cameraPermLauncher.launch(Manifest.permission.CAMERA)
@@ -372,7 +381,7 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
         Box(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Box(
                 modifier = Modifier.align(Alignment.TopStart).padding(12.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.4f))
-                    .clickable { navController?.popBackStack() }.padding(8.dp)
+                    .clickable { navController?.popBackStack("home", inclusive = false) }.padding(8.dp)
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = Color.White, modifier = Modifier.size(22.dp))
             }

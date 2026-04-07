@@ -184,18 +184,15 @@ fun MainScaffold() {
                         tabs         = tabs,
                         currentRoute = currentRoute,
                         onTabSelect  = { tab ->
-                            if (tab == MainTab.HOME) {
-                                // 回首页：直接 pop 回首页，确保无论当前栈状态如何都能正确返回
-                                navController.popBackStack(MainTab.HOME.route, inclusive = false)
-                            } else {
-                                navController.navigate(tab.route) {
-                                    // 用 route 字符串 popUpTo，避免 startDestinationId hash 不准确的问题
-                                    popUpTo(MainTab.HOME.route) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState    = true
+                            navController.navigate(tab.route) {
+                                popUpTo(MainTab.HOME.route) {
+                                    // 点 HOME 时 inclusive=true 彻底清栈再重建，
+                                    // 解决 launchSingleTop no-op 导致无法回首页的问题
+                                    inclusive = (tab == MainTab.HOME)
+                                    saveState = (tab != MainTab.HOME)
                                 }
+                                launchSingleTop = true
+                                restoreState    = (tab != MainTab.HOME)
                             }
                         }
                     )
