@@ -54,7 +54,7 @@ class SolaceApplication : Application(), ImageLoaderFactory {
 
         // ── 启动策略拉取（优先缓存，后台更新） ──────────────────────────────
         appScope.launch {
-            strategyRepository.getStrategy()
+            strategyRepository.getStrategy(forceRefresh = true)
                 .onSuccess { _strategyFlow.value = it }
         }
     }

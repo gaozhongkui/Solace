@@ -233,9 +233,6 @@ object HuggingFaceApi {
     private const val MODEL    = "black-forest-labs/FLUX.1-schnell"
     private const val ENDPOINT = "https://router.huggingface.co/hf-inference/models/$MODEL"
 
-    /** Read token from remote strategy config at call time. */
-    private fun resolveToken(): String =
-        SolaceApplication.strategyFlow.value?.flagString("hf_token") ?: ""
 
     /**
      * Generates an image via HuggingFace Inference API, saves to [cacheDir]
@@ -246,7 +243,7 @@ object HuggingFaceApi {
         cacheDir : File,
         prompt   : String
     ): String = withContext(Dispatchers.IO) {
-        val token = resolveToken()
+        val token = SolaceApplication.strategyFlow.value?.flagString("hf_token") ?: ""
         if (token.isBlank()) throw Exception("HuggingFace token not configured")
 
         val json    = JSONObject().put("inputs", prompt).toString()

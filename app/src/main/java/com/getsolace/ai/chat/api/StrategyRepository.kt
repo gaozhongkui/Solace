@@ -52,27 +52,19 @@ class StrategyRepository(
 
     private suspend fun fetchFromGitee(): Result<AppStrategy> {
         return runCatching {
-            try {
-                val body = service.fetchRawFile(
-                    owner    = config.owner,
-                    repo     = config.repo,
-                    branch   = config.branch,
-                    filepath = config.filePath
-                )
-                val json     = body.string()
-                val strategy = gson.fromJson(json, AppStrategy::class.java)
+            val body = service.fetchRawFile(
+                owner    = config.owner,
+                repo     = config.repo,
+                branch   = config.branch,
+                filepath = config.filePath
+            )
+            val json     = body.string()
+            val strategy = gson.fromJson(json, AppStrategy::class.java)
 
-                // 3. 校验版本字段合法性
-                require(strategy.version > 0) { "策略 version 字段无效" }
+            require(strategy.version > 0) { "策略 version 字段无效" }
 
-                // 4. 写入缓存
-                cache.save(strategy)
-                strategy
-            }catch (e: Exception){
-                Log.w("gzk", "fetchFromGitee: ", e)
-            }
-            //默认的值
-            AppStrategy()
+            cache.save(strategy)
+            strategy
         }
     }
 }
