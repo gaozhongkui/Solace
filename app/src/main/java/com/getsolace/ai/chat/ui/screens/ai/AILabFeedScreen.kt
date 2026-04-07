@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.getsolace.ai.chat.CreateAIActivity
 import com.getsolace.ai.chat.FeedItemDetailActivity
 import com.getsolace.ai.chat.data.AIGeneratedImage
 import com.getsolace.ai.chat.data.FeedItem
@@ -27,17 +28,17 @@ import com.getsolace.ai.chat.data.UnifiedFeedManager
 import com.getsolace.ai.chat.ui.components.ShimmerBox
 import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.ui.theme.*
-import com.getsolace.ai.chat.viewmodel.AIViewModel
 
 // ─── AI Lab Feed Screen ───────────────────────────────────────────────────────
 
 @Composable
-fun AILabFeedScreen(vm: AIViewModel) {
+fun AILabFeedScreen() {
     val feedItems     by UnifiedFeedManager.items.collectAsStateWithLifecycle()
     val isFeedLoading by UnifiedFeedManager.isLoading.collectAsStateWithLifecycle()
     val isLoadingMore by UnifiedFeedManager.isLoadingMore.collectAsStateWithLifecycle()
-    var showConfig by remember { mutableStateOf(false) }
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) { UnifiedFeedManager.start() }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -148,7 +149,7 @@ fun AILabFeedScreen(vm: AIViewModel) {
 
         // ── FAB ───────────────────────────────────────────────────────────────
         ExtendedFloatingActionButton(
-            onClick        = { showConfig = true },
+            onClick        = { context.startActivity(CreateAIActivity.newIntent(context)) },
             containerColor = AccentPrimary,
             contentColor   = TextPrimary,
             modifier       = Modifier
@@ -158,10 +159,6 @@ fun AILabFeedScreen(vm: AIViewModel) {
             Icon(Icons.Default.AutoAwesome, null)
             Spacer(Modifier.width(AppSpacing.sm))
             Text("AI 创作")
-        }
-
-        if (showConfig) {
-            AIConfigSheet(vm = vm, onDismiss = { showConfig = false })
         }
     }
 }

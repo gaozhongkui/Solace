@@ -44,7 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.getsolace.ai.chat.data.AIImageStore
 import com.getsolace.ai.chat.data.AppStrategy
 import com.getsolace.ai.chat.data.VaultStore
-import com.getsolace.ai.chat.ui.screens.ai.CreateAIScreen
+import com.getsolace.ai.chat.ui.screens.ai.AILabFeedScreen
 import com.getsolace.ai.chat.ui.screens.gallery.ImageGalaxyScreen
 import com.getsolace.ai.chat.ui.screens.gallery.PhotoDetailScreen
 import com.getsolace.ai.chat.ui.screens.gallery.MosaicScreen
@@ -331,7 +331,7 @@ fun MainNavHost(
     ) {
         // ── Tab roots ────────────────────────────────────────────────────────
         composable(MainTab.HOME.route)   { HomeScreen(navController = navController) }
-        composable(MainTab.CREATE.route) { CreateAIScreen(navController = navController) }
+        composable(MainTab.CREATE.route) { AILabFeedScreen() }
         composable(MainTab.VAULT.route)  { VaultScreen() }
         composable(MainTab.ME.route)     { MeScreen() }
 
