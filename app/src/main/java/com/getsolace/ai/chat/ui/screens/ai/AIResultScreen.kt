@@ -45,13 +45,17 @@ fun AIResultScreen(imageUrl: String, vm: AIViewModel, onFinish: () -> Unit = {})
         }
     }
 
+    // 底部按钮区高度：按钮本身 + 16dp 上边距 + 16dp 下边距 + 导航栏
+    val bottomBarHeight = 88.dp
+
     Box(modifier = Modifier.fillMaxSize()) {
+        // ── 滚动内容区（底部留出按钮空间）────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = AppSpacing.lg)
-                .padding(bottom = AppSpacing.lg)
+                .padding(bottom = bottomBarHeight)
         ) {
             Row(
                 modifier = Modifier
@@ -101,33 +105,44 @@ fun AIResultScreen(imageUrl: String, vm: AIViewModel, onFinish: () -> Unit = {})
                 Column(modifier = Modifier.padding(AppSpacing.lg)) {
                     Text("提示词", style = MaterialTheme.typography.labelMedium.copy(color = AccentPrimary))
                     Spacer(Modifier.height(AppSpacing.xs))
-                    Text(prompt, maxLines = 6,
-                        overflow = TextOverflow.Ellipsis,style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                    Text(
+                        prompt,
+                        maxLines = 6,
+                        overflow = TextOverflow.Ellipsis,
+                        style    = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary)
+                    )
                     Spacer(Modifier.height(AppSpacing.sm))
                     Text("风格: ${style.title}", style = MaterialTheme.typography.labelSmall.copy(color = TextTertiary))
                 }
             }
-            Spacer(Modifier.height(AppSpacing.xl))
+        }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
-                OutlinedButton(
-                    onClick = { vm.resetToConfig() },
-                    modifier = Modifier.weight(1f),
-                    shape    = RoundedCornerShape(AppRadius.md),
-                    border   = BorderStroke(1.dp, AccentPrimary)
-                ) {
-                    Text("重新创作", color = AccentPrimary)
-                }
-                Button(
-                    onClick  = { showSuccess = true },
-                    modifier = Modifier.weight(1f),
-                    shape    = RoundedCornerShape(AppRadius.md),
-                    colors   = ButtonDefaults.buttonColors(containerColor = AccentPrimary)
-                ) {
-                    Text("保存相册")
-                }
+        // ── 固定底部按钮区 ────────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = AppSpacing.lg)
+                .padding(bottom = 16.dp, top = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.md)
+        ) {
+            OutlinedButton(
+                onClick  = { vm.resetToConfig() },
+                modifier = Modifier.weight(1f),
+                shape    = RoundedCornerShape(AppRadius.md),
+                border   = BorderStroke(1.dp, AccentPrimary)
+            ) {
+                Text("重新创作", color = AccentPrimary)
             }
-            Spacer(Modifier.height(AppSpacing.lg))
+            Button(
+                onClick  = { showSuccess = true },
+                modifier = Modifier.weight(1f),
+                shape    = RoundedCornerShape(AppRadius.md),
+                colors   = ButtonDefaults.buttonColors(containerColor = AccentPrimary)
+            ) {
+                Text("保存相册")
+            }
         }
 
         if (showSuccess) {
