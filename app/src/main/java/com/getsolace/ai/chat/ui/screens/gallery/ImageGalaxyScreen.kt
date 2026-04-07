@@ -7,12 +7,6 @@ import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.provider.MediaStore
-import android.util.Size as CameraSize
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -46,7 +40,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.getsolace.ai.chat.ui.components.HandGestureController
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
@@ -212,12 +205,7 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
     val dragX = remember { Animatable(0f) }
     val dragY = remember { Animatable(0f) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
-
-    var hasCameraPermission by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-    }
     var cursorPos by remember { mutableStateOf<Offset?>(null) }
-    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     val lifecycleOwner = context as androidx.lifecycle.LifecycleOwner
 
     val glowColor = remember(currentShape) {
@@ -230,69 +218,8 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
         }
     }
 
-    val cameraPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        hasCameraPermission = granted
-    }
-
-    val gestureController = remember {
-        HandGestureController(
-            context = context,
-            onZoom = { factor -> zoomScale = (zoomScale * factor).coerceIn(0.5f, 3.5f) },
-            onTap = { nx, ny ->
-                if (canvasSize.width > 0f) {
-                    val tapOffset = Offset(nx * canvasSize.width, ny * canvasSize.height)
-                    val rotY = animationTime * 0.12 + dragX.value / 180.0
-                    val rotX = animationTime * 0.08 + dragY.value / 180.0
-                    var nearest: ImageParticle? = null
-                    var minDist = Float.MAX_VALUE
-                    particles.forEach { p ->
-                        val pos = rotate(positionFor(p, currentShape, particles.size, animationTime, canvasSize.width, canvasSize.height), rotX, rotY)
-                        val proj = project(pos, canvasSize.width, canvasSize.height, zoomScale)
-                        val dist = sqrt((proj.x - tapOffset.x).pow(2) + (proj.y - tapOffset.y).pow(2))
-                        if (dist < 100f * proj.scale && dist < minDist) { minDist = dist; nearest = p }
-                    }
-                    selectedParticle = nearest
-                }
-            },
-            onCursor = { nx, ny ->
-                cursorPos = if (nx != null && ny != null && canvasSize.width > 0f)
-                    Offset(nx * canvasSize.width, ny * canvasSize.height)
-                else null
-            }
-        )
-    }
-
-    LaunchedEffect(hasCameraPermission) {
-        if (!hasCameraPermission) return@LaunchedEffect
-        withContext(Dispatchers.IO) { gestureController.init() }
-        @Suppress("DEPRECATION")
-        val analysis = ImageAnalysis.Builder()
-            .setTargetResolution(CameraSize(640, 480))
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-            .build()
-            .also { it.setAnalyzer(cameraExecutor, gestureController::processFrame) }
-        try {
-            val provider = withContext(Dispatchers.IO) { ProcessCameraProvider.getInstance(context).get() }
-            provider.unbindAll()
-            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, analysis)
-        } catch (e: Exception) {
-            android.util.Log.e("GalaxyScreen", "CameraX Error: ${e.message}")
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            // 先停止相机 executor，等待已入队的帧处理完毕，再关闭 landmarker
-            // 避免相机线程在 landmarker 已销毁后仍调用 detectAsync → SIGSEGV
-            cameraExecutor.shutdown()
-            runCatching { cameraExecutor.awaitTermination(300, TimeUnit.MILLISECONDS) }
-            gestureController.close()
-        }
-    }
 
     LaunchedEffect(Unit) {
-        if (!hasCameraPermission) cameraPermLauncher.launch(Manifest.permission.CAMERA)
         val rng = Random(System.nanoTime())
         stars = (0 until 180).map { StarParticle(rng.nextFloat(), rng.nextFloat(), 1f + rng.nextFloat() * 2.5f, 0.2f + rng.nextFloat() * 0.7f, rng.nextFloat() * 10f) }
         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
