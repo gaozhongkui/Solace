@@ -1,14 +1,16 @@
 package com.getsolace.ai.chat.ui.screens.ai
 
-import androidx.compose.foundation.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.staggeredgrid.*
+
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.getsolace.ai.chat.ui.theme.*
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -16,18 +18,20 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.getsolace.ai.chat.CreateAIActivity
 import com.getsolace.ai.chat.FeedItemDetailActivity
+import com.getsolace.ai.chat.R
 import com.getsolace.ai.chat.data.AIGeneratedImage
 import com.getsolace.ai.chat.data.FeedItem
 import com.getsolace.ai.chat.data.UnifiedFeedManager
 import com.getsolace.ai.chat.ui.components.ShimmerBox
 import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
-import com.getsolace.ai.chat.ui.theme.*
+
 
 // ─── AI Lab Feed Screen ───────────────────────────────────────────────────────
 
@@ -51,7 +55,7 @@ fun AILabFeedScreen() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "AuraAI",
+                    stringResource(R.string.app_name),
                     style    = MaterialTheme.typography.headlineLarge.copy(
                         color      = TextPrimary,
                         fontWeight = FontWeight.Bold,

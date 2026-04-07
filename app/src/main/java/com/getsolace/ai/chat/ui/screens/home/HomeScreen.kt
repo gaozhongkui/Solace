@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.request.videoFrameMillis
+import com.getsolace.ai.chat.R
 import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.MediaCategory
 import com.getsolace.ai.chat.ui.theme.*
@@ -270,7 +272,7 @@ fun AuraHeader(onAIClick: () -> Unit, onVaultClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "AuraAI",
+                stringResource(R.string.app_name),
                 fontSize   = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color      = TextPri,

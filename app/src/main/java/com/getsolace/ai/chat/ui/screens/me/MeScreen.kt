@@ -532,7 +532,7 @@ fun SettingsSheet(onDismiss: () -> Unit) {
                 SettingsItem(icon = Icons.Default.PrivacyTip, title = "隐私政策",      onClick = { })
                 SettingsItem(icon = Icons.Default.Description,title = "服务条款",      onClick = { })
                 SettingsItem(icon = Icons.Default.Star,       title = "给应用评分",    onClick = { })
-                SettingsItem(icon = Icons.Default.Info,       title = "关于 AuraAI",   subtitle = "版本 1.0", onClick = { })
+                SettingsItem(icon = Icons.Default.Info,       title = "关于光晕AI",    subtitle = "版本 1.0", onClick = { })
             }
         }
     }
