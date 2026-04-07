@@ -15,7 +15,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -181,15 +188,7 @@ fun StyleOptionCard(style: AIImageStyle, isSelected: Boolean, onClick: () -> Uni
             .padding(AppSpacing.sm),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier         = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(AppRadius.sm))
-                .background(AccentPrimary.copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.AutoAwesome, null, tint = AccentPrimary, modifier = Modifier.size(28.dp))
-        }
+        StylePreviewBox(styleId = style.id)
         Spacer(Modifier.height(AppSpacing.xs))
         Text(
             style.title,
@@ -230,6 +229,170 @@ fun AspectRatioButton(
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
             )
         )
+    }
+}
+
+// ─── Style Preview Box ────────────────────────────────────────────────────────
+
+@Composable
+fun StylePreviewBox(styleId: String) {
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .clip(RoundedCornerShape(AppRadius.sm))
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w  = size.width
+            val h  = size.height
+            val cx = w / 2f
+            val cy = h / 2f
+
+            when (styleId) {
+
+                // ── DaVinci：暖金色 + 同心弧 ──────────────────────────────
+                "davinci" -> {
+                    drawRect(brush = Brush.linearGradient(
+                        colors = listOf(Color(0xFF1C0A00), Color(0xFF7A4500), Color(0xFFD4950A)),
+                        start  = Offset(0f, h), end = Offset(w, 0f)
+                    ))
+                    val arcColor = Color(0xFFFFD060)
+                    for (i in 1..3) {
+                        val r = w * (0.14f + i * 0.11f)
+                        drawArc(
+                            color      = arcColor.copy(alpha = 0.9f - i * 0.22f),
+                            startAngle = -210f, sweepAngle = 150f,
+                            useCenter  = false,
+                            topLeft    = Offset(cx - r, cy - r),
+                            size       = Size(r * 2f, r * 2f),
+                            style      = Stroke(width = 2.5f)
+                        )
+                    }
+                    drawCircle(color = Color(0xFFFFD060), radius = w * 0.07f,
+                        center = Offset(cx - w * 0.05f, cy - h * 0.12f))
+                }
+
+                // ── 3D渲染：深蓝 + 等轴测正方体 ──────────────────────────
+                "3d" -> {
+                    drawRect(brush = Brush.linearGradient(
+                        colors = listOf(Color(0xFF00101E), Color(0xFF003060), Color(0xFF005580)),
+                        start  = Offset(0f, h), end = Offset(w, 0f)
+                    ))
+                    val cs = w * 0.26f
+                    val topPath = Path().apply {
+                        moveTo(cx,        cy - cs * 0.72f)
+                        lineTo(cx + cs,   cy - cs * 0.36f)
+                        lineTo(cx,        cy)
+                        lineTo(cx - cs,   cy - cs * 0.36f)
+                        close()
+                    }
+                    val leftPath = Path().apply {
+                        moveTo(cx - cs,   cy - cs * 0.36f)
+                        lineTo(cx,        cy)
+                        lineTo(cx,        cy + cs * 0.72f)
+                        lineTo(cx - cs,   cy + cs * 0.36f)
+                        close()
+                    }
+                    val rightPath = Path().apply {
+                        moveTo(cx,        cy)
+                        lineTo(cx + cs,   cy - cs * 0.36f)
+                        lineTo(cx + cs,   cy + cs * 0.36f)
+                        lineTo(cx,        cy + cs * 0.72f)
+                        close()
+                    }
+                    drawPath(topPath,   color = Color(0xFF00CFFF).copy(alpha = 0.95f))
+                    drawPath(leftPath,  color = Color(0xFF005888).copy(alpha = 0.95f))
+                    drawPath(rightPath, color = Color(0xFF007AB8).copy(alpha = 0.95f))
+                    val edgeColor = Color(0xFF40E0FF)
+                    drawPath(topPath,   color = edgeColor, style = Stroke(width = 1.2f))
+                    drawPath(leftPath,  color = edgeColor, style = Stroke(width = 1.2f))
+                    drawPath(rightPath, color = edgeColor, style = Stroke(width = 1.2f))
+                }
+
+                // ── Turbo：紫电 + 闪电 ────────────────────────────────────
+                "turbo" -> {
+                    drawRect(brush = Brush.linearGradient(
+                        colors = listOf(Color(0xFF120020), Color(0xFF5500AA), Color(0xFFAA00EE)),
+                        start  = Offset(0f, h), end = Offset(w, 0f)
+                    ))
+                    drawCircle(color = Color(0xFFDD00FF).copy(alpha = 0.25f),
+                        radius = w * 0.38f, center = Offset(cx, cy))
+                    val bolt = Path().apply {
+                        moveTo(cx + w * 0.09f, cy - h * 0.37f)
+                        lineTo(cx - w * 0.11f, cy - h * 0.02f)
+                        lineTo(cx + w * 0.04f, cy - h * 0.02f)
+                        lineTo(cx - w * 0.09f, cy + h * 0.37f)
+                        lineTo(cx + w * 0.17f, cy + h * 0.02f)
+                        lineTo(cx + w * 0.03f, cy + h * 0.02f)
+                        close()
+                    }
+                    drawPath(bolt, color = Color(0xFFFFE040))
+                    drawPath(bolt, color = Color.White.copy(alpha = 0.45f), style = Stroke(width = 1f))
+                }
+
+                // ── ImagineArt：珊瑚渐变 + 八芒星 ────────────────────────
+                "imagineart" -> {
+                    drawRect(brush = Brush.linearGradient(
+                        colors = listOf(Color(0xFF1A0020), Color(0xFF880044), Color(0xFFEE4400)),
+                        start  = Offset(0f, h), end = Offset(w, 0f)
+                    ))
+                    val outerR = w * 0.34f
+                    val innerR = w * 0.14f
+                    val star   = Path()
+                    val pts    = 8
+                    for (i in 0 until pts * 2) {
+                        val angle = (i * Math.PI / pts - Math.PI / 2).toFloat()
+                        val r     = if (i % 2 == 0) outerR else innerR
+                        val x     = cx + r * kotlin.math.cos(angle)
+                        val y     = cy + r * kotlin.math.sin(angle)
+                        if (i == 0) star.moveTo(x, y) else star.lineTo(x, y)
+                    }
+                    star.close()
+                    drawPath(star, brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFFFFEE40), Color(0xFFFF6600), Color(0xFFFF0077)),
+                        center = Offset(cx, cy), radius = outerR
+                    ))
+                    drawPath(star, color = Color(0xFFFFCC44).copy(alpha = 0.6f), style = Stroke(width = 1f))
+                }
+
+                // ── SeeDream：深邃星空 + 月牙 ────────────────────────────
+                "seedream" -> {
+                    drawRect(brush = Brush.linearGradient(
+                        colors = listOf(Color(0xFF020012), Color(0xFF0A0040), Color(0xFF160066)),
+                        start  = Offset(0f, 0f), end = Offset(w, h)
+                    ))
+                    // 星星
+                    listOf(
+                        Offset(cx - w*0.30f, cy - h*0.33f) to 2.0f,
+                        Offset(cx + w*0.26f, cy - h*0.26f) to 1.5f,
+                        Offset(cx - w*0.12f, cy + h*0.30f) to 1.8f,
+                        Offset(cx + w*0.30f, cy + h*0.18f) to 1.2f,
+                        Offset(cx + w*0.08f, cy - h*0.12f) to 1.0f,
+                        Offset(cx - w*0.28f, cy + h*0.10f) to 1.3f,
+                    ).forEach { (pos, r) ->
+                        drawCircle(color = Color.White.copy(alpha = 0.88f), radius = r, center = pos)
+                    }
+                    // 月牙（差集）
+                    val moonR  = w * 0.22f
+                    val mc     = Offset(cx - w * 0.05f, cy + h * 0.06f)
+                    val fullMoon = Path().apply {
+                        addOval(Rect(mc.x - moonR, mc.y - moonR, mc.x + moonR, mc.y + moonR))
+                    }
+                    val cutR = moonR * 0.80f
+                    val cutC = Offset(mc.x + moonR * 0.52f, mc.y - moonR * 0.08f)
+                    val cutCircle = Path().apply {
+                        addOval(Rect(cutC.x - cutR, cutC.y - cutR, cutC.x + cutR, cutC.y + cutR))
+                    }
+                    val crescent = Path().apply { op(fullMoon, cutCircle, PathOperation.Difference) }
+                    drawPath(crescent, brush = Brush.linearGradient(
+                        colors = listOf(Color(0xFFDDCCFF), Color(0xFFAA88FF)),
+                        start  = Offset(mc.x - moonR, mc.y - moonR),
+                        end    = Offset(mc.x + moonR, mc.y + moonR)
+                    ))
+                }
+
+                else -> drawRect(color = AccentPrimary.copy(alpha = 0.2f))
+            }
+        }
     }
 }
 
