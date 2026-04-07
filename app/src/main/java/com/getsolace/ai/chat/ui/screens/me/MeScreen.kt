@@ -19,19 +19,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.getsolace.ai.chat.AIImageDetailActivity
 import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 import com.getsolace.ai.chat.data.AIGeneratedImage
 import com.getsolace.ai.chat.data.AIImageStore
-import com.getsolace.ai.chat.ui.screens.ai.RunMateToast
 import com.getsolace.ai.chat.ui.theme.*
-import java.text.SimpleDateFormat
-import java.util.*
 
 // ─── Local design tokens ──────────────────────────────────────────────────────
 
@@ -51,10 +49,9 @@ private val TextTer       = Color(0x40FFFFFF)
 
 @Composable
 fun MeScreen() {
-    val history by AIImageStore.images.collectAsStateWithLifecycle()
-
-    var selectedImage by remember { mutableStateOf<AIGeneratedImage?>(null) }
-    var showSettings  by remember { mutableStateOf(false) }
+    val history  by AIImageStore.images.collectAsStateWithLifecycle()
+    val context  = LocalContext.current
+    var showSettings by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -186,23 +183,15 @@ fun MeScreen() {
                     items(history, key = { it.id }) { img ->
                         AIHistoryCard(
                             image   = img,
-                            onClick = { selectedImage = img }
+                            onClick = {
+                                context.startActivity(
+                                    AIImageDetailActivity.newIntent(context, img.id)
+                                )
+                            }
                         )
                     }
                 }
             }
-        }
-
-        // ── Image detail overlay ───────────────────────────────────────────────
-        selectedImage?.let { img ->
-            AIImageDetailOverlay(
-                image     = img,
-                onDismiss = { selectedImage = null },
-                onDelete  = {
-                    AIImageStore.deleteImage(img.id)
-                    selectedImage = null
-                }
-            )
         }
 
         // ── Settings sheet ────────────────────────────────────────────────────
@@ -485,132 +474,6 @@ fun CreationsEmptyState(modifier: Modifier = Modifier) {
             color     = TextSec,
             textAlign = TextAlign.Center
         )
-    }
-}
-
-// ─── Image Detail Overlay ─────────────────────────────────────────────────────
-
-@Composable
-fun AIImageDetailOverlay(
-    image: AIGeneratedImage,
-    onDismiss: () -> Unit,
-    onDelete: () -> Unit
-) {
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    val dateStr = remember(image.createdAt) {
-        SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.CHINA).format(Date(image.createdAt))
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.95f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-        ) {
-            // Top bar
-            Row(
-                modifier          = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, "关闭", tint = TextPri)
-                }
-                Text(
-                    "作品详情",
-                    fontSize      = 16.sp,
-                    fontWeight    = FontWeight.Bold,
-                    color         = TextPri,
-                    modifier      = Modifier.weight(1f),
-                    textAlign     = TextAlign.Center
-                )
-                IconButton(onClick = { showDeleteConfirm = true }) {
-                    Icon(Icons.Default.Delete, "删除", tint = Color(0xFFFF3B30))
-                }
-            }
-
-            // Image
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .padding(horizontal = 16.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(CardSurface)
-            ) {
-                SolaceAsyncImage(
-                    model              = if (image.imageUrl.isNotBlank()) image.imageUrl else null,
-                    contentDescription = image.prompt,
-                    contentScale       = ContentScale.Crop,
-                    modifier           = Modifier.fillMaxSize(),
-                    shape              = RoundedCornerShape(20.dp)
-                )
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            // Info card
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(CardSurface)
-                    .border(1.dp, CardBorder, RoundedCornerShape(16.dp))
-                    .padding(16.dp)
-            ) {
-                Column {
-                    InfoRow(label = "风格", value = image.styleTitle)
-                    Spacer(Modifier.height(8.dp))
-                    InfoRow(label = "比例", value = image.aspectRatio)
-                    Spacer(Modifier.height(8.dp))
-                    InfoRow(label = "创作时间", value = dateStr)
-                    if (image.prompt.isNotBlank()) {
-                        Spacer(Modifier.height(12.dp))
-                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
-                        Spacer(Modifier.height(12.dp))
-                        Text("提示词", fontSize = 12.sp, color = VioletBright, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(6.dp))
-                        Text(image.prompt, fontSize = 13.sp, color = TextPri, maxLines = 6,
-                            overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
-            Spacer(Modifier.height(40.dp))
-        }
-
-        if (showDeleteConfirm) {
-            AlertDialog(
-                onDismissRequest = { showDeleteConfirm = false },
-                title            = { Text("删除作品", color = TextPri) },
-                text             = { Text("确定要删除这件作品吗？", color = TextSec) },
-                confirmButton    = {
-                    TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
-                        Text("删除", color = Color(0xFFFF3B30))
-                    }
-                },
-                dismissButton    = {
-                    TextButton(onClick = { showDeleteConfirm = false }) {
-                        Text("取消", color = TextSec)
-                    }
-                },
-                containerColor   = Color(0xFF1C2135),
-                shape            = RoundedCornerShape(20.dp)
-            )
-        }
-    }
-}
-
-@Composable
-fun InfoRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text(label, fontSize = 13.sp, color = TextSec, modifier = Modifier.width(80.dp))
-        Text(value, fontSize = 13.sp, color = TextPri)
     }
 }
 

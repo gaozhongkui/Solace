@@ -60,14 +60,18 @@ class AIViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                // Simulate progress animation while waiting for API
+                val startTime = System.currentTimeMillis()
+                val minDurationMs = 3500L  // 最少展示 3.5s 进度动画
+
+                // Progress animation runs until manually cancelled
                 val progressJob = launch {
                     var p = 0f
-                    while (p < 0.95f) {
-                        delay(300)
-                        p = minOf(p + (0.02f + Math.random().toFloat() * 0.05f), 0.95f)
+                    while (p < 0.92f) {
+                        delay(200)
+                        p = minOf(p + (0.015f + Math.random().toFloat() * 0.03f), 0.92f)
                         _progress.value = p
                     }
+                    // Hold at 0.92 until API result is ready
                 }
 
                 val fullPrompt = buildFullPrompt()
@@ -79,9 +83,15 @@ class AIViewModel : ViewModel() {
                     model  = model
                 )
 
+                // Ensure minimum display time before showing result
+                val elapsed = System.currentTimeMillis() - startTime
+                if (elapsed < minDurationMs) {
+                    delay(minDurationMs - elapsed)
+                }
+
                 progressJob.cancel()
                 _progress.value = 1f
-                delay(300)
+                delay(400)
 
                 _generatedImageUrl.value = imageUrl
                 _step.value = CreateAIStep.RESULT

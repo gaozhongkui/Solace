@@ -45,6 +45,10 @@
             android:name=".FeedItemDetailActivity"
             android:exported="false"
             android:theme="@style/Theme.Solace" />
+        <activity
+            android:name=".AIImageDetailActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Solace" />
     </application>
 
 </manifest>
