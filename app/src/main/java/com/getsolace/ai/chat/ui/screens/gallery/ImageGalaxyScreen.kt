@@ -16,10 +16,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -196,6 +198,7 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
     val scope = rememberCoroutineScope()
 
     var particles by remember { mutableStateOf(emptyList<ImageParticle>()) }
+    var isLoading by remember { mutableStateOf(true) }
     var stars by remember { mutableStateOf(emptyList<StarParticle>()) }
     var animationTime by remember { mutableDoubleStateOf(0.0) }
     var currentShape by remember { mutableStateOf(GalaxyShape.SPHERE) }
@@ -227,6 +230,7 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
             val loaded = loadGalleryImages(context, 40)
             particles = loaded.mapIndexed { i, (id, bmp) -> ImageParticle(id, bmp?.asImageBitmap(), i, abs(id.hashCode())) }
         }
+        isLoading = false
     }
 
     LaunchedEffect(Unit) {
@@ -318,6 +322,42 @@ fun ImageGalaxyScreen(navController: androidx.navigation.NavController? = null) 
             }
             Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 30.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 GalaxyShape.entries.forEach { Box(Modifier.height(4.dp).width(if (it == currentShape) 20.dp else 6.dp).clip(RoundedCornerShape(2.dp)).background(if (it == currentShape) Color.White else Color.White.copy(0.3f))) }
+            }
+        }
+
+        // Loading 状态遮罩
+        AnimatedVisibility(
+            visible = isLoading,
+            enter   = fadeIn(),
+            exit    = fadeOut(animationSpec = tween(400))
+        ) {
+            Box(
+                modifier         = Modifier.fillMaxSize().background(Color(0xFF010103)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(
+                            color       = glowColor,
+                            strokeWidth = 2.dp,
+                            modifier    = Modifier.size(56.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(glowColor.copy(alpha = 0.15f), CircleShape)
+                        )
+                    }
+                    Text(
+                        text      = "正在加载星系...",
+                        color     = Color.White.copy(alpha = 0.6f),
+                        fontSize  = 13.sp,
+                        letterSpacing = 1.sp
+                    )
+                }
             }
         }
 
