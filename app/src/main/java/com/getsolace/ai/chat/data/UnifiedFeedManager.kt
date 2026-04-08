@@ -1,9 +1,9 @@
 package com.getsolace.ai.chat.data
 
+import com.getsolace.ai.chat.network.AppNetworkClient
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import kotlin.random.Random
@@ -38,8 +38,6 @@ object UnifiedFeedManager {
     private const val PAGE_SIZE = 20
     private const val HEALTH_CHECK_INTERVAL_MS = 60_000L
     private const val CIVITAI_BASE = "https://civitai.com/api/v1/images"
-
-    private val httpClient = OkHttpClient()
 
     private val _items = MutableStateFlow<List<FeedItem>>(emptyList())
     val items: StateFlow<List<FeedItem>> = _items
@@ -120,7 +118,7 @@ object UnifiedFeedManager {
         }
 
         val request = Request.Builder().url(url).build()
-        val response = httpClient.newCall(request).execute()
+        val response = AppNetworkClient.execute(request)
 
         if (!response.isSuccessful) return@withContext emptyList()
 
