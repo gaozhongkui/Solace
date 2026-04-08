@@ -18,6 +18,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
@@ -155,14 +157,120 @@ class AIViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-// ─── Shared OkHttp client ─────────────────────────────────────────────────────
+// ─── Proxy pool + failover HTTP client ───────────────────────────────────────
+//
+// 代理列表从远程策略 featureFlags["proxy_list"] 读取，JSON 数组格式：
+//   "proxy_list": "[{\"host\":\"1.2.3.4\",\"port\":7890,\"type\":\"HTTP\"},
+//                   {\"host\":\"5.6.7.8\",\"port\":1080,\"type\":\"SOCKS\"}]"
+//
+// 执行策略：
+//   1. 按顺序逐个尝试代理，成功则缓存该 index 作为当前可用代理
+//   2. 当前代理连续失败 MAX_FAILS 次后，自动切换到下一个
+//   3. 所有代理均失败则降级为直连（Proxy.NO_PROXY）
+//   4. 策略配置发生变化时重置代理池
 
-private val sharedHttpClient: OkHttpClient by lazy {
-    OkHttpClient.Builder()
+private data class ProxyEntry(val host: String, val port: Int, val type: String)
+
+private object AppHttpClient {
+
+    private const val MAX_FAILS   = 2    // 单个代理连续失败多少次后切换
+    private const val TAG         = "AppHttpClient"
+
+    private var cachedListKey: String    = ""
+    private var proxyList: List<ProxyEntry> = emptyList()
+    private var currentIndex: Int        = 0
+    private var failCount: Int           = 0
+
+    // 基础 OkHttpClient builder 参数（超时）
+    private fun baseBuilder() = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(90, TimeUnit.SECONDS)   // image gen can be slow
+        .readTimeout(90, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
+
+    /** 将策略字符串解析为代理列表 */
+    private fun parseProxyList(raw: String): List<ProxyEntry> {
+        if (raw.isBlank()) return emptyList()
+        return try {
+            val arr = org.json.JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i ->
+                val obj  = arr.getJSONObject(i)
+                val host = obj.optString("host", "")
+                val port = obj.optInt("port", 0)
+                val type = obj.optString("type", "HTTP")
+                if (host.isNotBlank() && port > 0) ProxyEntry(host, port, type) else null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "proxy_list parse error: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /** 根据 ProxyEntry 构建 OkHttpClient */
+    private fun buildClient(entry: ProxyEntry?): OkHttpClient {
+        val builder = baseBuilder()
+        if (entry != null) {
+            val proxyType = if (entry.type.equals("SOCKS", ignoreCase = true))
+                Proxy.Type.SOCKS else Proxy.Type.HTTP
+            builder.proxy(Proxy(proxyType, InetSocketAddress(entry.host, entry.port)))
+            Log.i(TAG, "Using proxy [${entry.type}] ${entry.host}:${entry.port}")
+        } else {
+            builder.proxy(Proxy.NO_PROXY)
+            Log.i(TAG, "Using direct connection (no proxy)")
+        }
+        return builder.build()
+    }
+
+    /**
+     * 执行带代理故障切换的 HTTP 请求。
+     * 内部按代理池顺序尝试，自动跳过失效代理，最终降级直连。
+     */
+    fun execute(request: okhttp3.Request): okhttp3.Response {
+        // 检查策略是否更新，若更新则重建代理池
+        val strategy = SolaceApplication.strategyFlow.value
+        val rawList  = strategy?.flagString("proxy_list") ?: ""
+        if (rawList != cachedListKey) {
+            proxyList    = parseProxyList(rawList)
+            currentIndex = 0
+            failCount    = 0
+            cachedListKey = rawList
+            Log.i(TAG, "Proxy pool updated: ${proxyList.size} proxies")
+        }
+
+        // 无代理配置 → 直连
+        if (proxyList.isEmpty()) {
+            return buildClient(null).newCall(request).execute()
+        }
+
+        // 尝试从当前 index 开始，最多轮询整个列表 + 1次直连
+        val total = proxyList.size + 1   // +1 = 直连兜底
+        repeat(total) { attempt ->
+            val entry = if (currentIndex < proxyList.size) proxyList[currentIndex] else null
+            try {
+                val response = buildClient(entry).newCall(request).execute()
+                // 成功：重置失败计数
+                failCount = 0
+                return response
+            } catch (e: Exception) {
+                failCount++
+                val label = entry?.let { "${it.host}:${it.port}" } ?: "direct"
+                Log.w(TAG, "Proxy [$label] failed ($failCount/$MAX_FAILS): ${e.message}")
+
+                if (failCount >= MAX_FAILS) {
+                    // 切换到下一个代理
+                    currentIndex = (currentIndex + 1) % total
+                    failCount    = 0
+                    val next = if (currentIndex < proxyList.size)
+                        proxyList[currentIndex].let { "${it.host}:${it.port}" }
+                    else "direct"
+                    Log.i(TAG, "Switching to next proxy: $next")
+                }
+
+                if (attempt == total - 1) throw e   // 全部失败才抛出
+            }
+        }
+        // unreachable
+        throw Exception("All proxies and direct connection failed")
+    }
 }
 
 // ─── Pollinations API ─────────────────────────────────────────────────────────
@@ -205,7 +313,7 @@ object PollinationsApi {
                       "&seed=$seed&nologo=true&enhance=true"
 
         val request  = Request.Builder().url(url).get().build()
-        val response = sharedHttpClient.newCall(request).execute()
+        val response = AppHttpClient.execute(request)
 
         if (!response.isSuccessful) {
             throw Exception("Pollinations HTTP ${response.code}")
@@ -254,7 +362,7 @@ object HuggingFaceApi {
             .post(body)
             .build()
 
-        val response = sharedHttpClient.newCall(request).execute()
+        val response = AppHttpClient.execute(request)
 
         if (!response.isSuccessful) {
             val errBody = response.body?.string() ?: ""

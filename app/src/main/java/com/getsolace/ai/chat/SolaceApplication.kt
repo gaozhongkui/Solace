@@ -9,6 +9,8 @@ import coil.memory.MemoryCache
 import com.getsolace.ai.chat.api.GiteeStrategyConfig
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.util.concurrent.TimeUnit
 import com.getsolace.ai.chat.api.PolicyRetrofitFactory
 import com.getsolace.ai.chat.api.StrategyCacheManager
@@ -60,10 +62,26 @@ class SolaceApplication : Application(), ImageLoaderFactory {
     }
 
     override fun newImageLoader(): ImageLoader {
+        // 代理：取 proxy_list 第一个可用条目供 Coil 使用
+        val strategy  = strategyFlow.value
+        val rawList   = strategy?.flagString("proxy_list") ?: ""
+        val firstProxy: Proxy = runCatching {
+            if (rawList.isBlank()) return@runCatching Proxy.NO_PROXY
+            val obj  = org.json.JSONArray(rawList).getJSONObject(0)
+            val host = obj.optString("host", "")
+            val port = obj.optInt("port", 0)
+            val type = obj.optString("type", "HTTP")
+            if (host.isBlank() || port <= 0) return@runCatching Proxy.NO_PROXY
+            val pType = if (type.equals("SOCKS", ignoreCase = true))
+                Proxy.Type.SOCKS else Proxy.Type.HTTP
+            Proxy(pType, InetSocketAddress(host, port))
+        }.getOrDefault(Proxy.NO_PROXY)
+
         val okHttp = OkHttpClient.Builder()
-            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))  // 10个连接复用5分钟
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(45, TimeUnit.SECONDS)
+            .proxy(firstProxy)
             .build()
 
         return ImageLoader.Builder(this)

@@ -1,0 +1,6 @@
+{
+  "featureFlags": {
+    "hf_token": "hf_xxx...",
+    "proxy_list": "[{\"host\":\"1.2.3.4\",\"port\":7890,\"type\":\"HTTP\"},{\"host\":\"5.6.7.8\",\"port\":1080,\"type\":\"SOCKS\"},{\"host\":\"9.10.11.12\",\"port\":8080,\"type\":\"HTTP\"}]"
+  }
+}
