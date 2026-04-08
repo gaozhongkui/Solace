@@ -1,3 +1,4 @@
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -16,9 +17,12 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        base.archivesName =
+            "Solace-vc${versionCode}-vn${versionName}"
 
         // ── 策略配置 ──────────────────────────────────────────
         buildConfigField("String", "STRATEGY_BASE_URL",  "\"https://gitee.com/\"")
