@@ -34,7 +34,7 @@ object UnifiedFeedManager {
 
     private const val MAX_ITEMS = 200
     private const val PAGE_SIZE = 20
-    private const val HEALTH_CHECK_INTERVAL_MS = 60_000L
+    private const val HEALTH_CHECK_INTERVAL_MS = 5 * 60_000L
     private const val CIVITAI_BASE = "https://civitai.com/api/v1/images"
 
     private val _items = MutableStateFlow<List<FeedItem>>(emptyList())
@@ -117,7 +117,7 @@ object UnifiedFeedManager {
                 .build()
 
             val response = try {
-                AppNetworkClient.execute(request)
+                AppNetworkClient.execute(request, connectSec = 15, readSec = 20, writeSec = 15)
             } catch (e: Exception) {
                 Log.e(TAG, "fetchCivitAI 网络异常 (${e.javaClass.simpleName}): ${e.message}")
                 return@withContext emptyList()

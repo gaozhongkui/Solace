@@ -33,8 +33,7 @@ object AppNetworkClient {
             .readTimeout(60,  TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .proxySelector(dynamicSelector)
-            // 关键：强制使用 HTTP/1.1 解决部分代理节点处理 H2 导致的 Connection reset 问题
-            .protocols(listOf(Protocol.HTTP_1_1)) 
+            .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
             .build()
     }
 

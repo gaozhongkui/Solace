@@ -10,7 +10,7 @@ class StrategyCacheManager(context: Context) {
     companion object {
         private const val PREF_NAME = "strategy_cache"
         private const val KEY_DATA  = "strategy_data"
-        private const val CACHE_TTL_MS = 30 * 60 * 1000L  // 30 分钟
+        private const val CACHE_TTL_MS = 2 * 60 * 60 * 1000L  // 2 小时
     }
 
     private val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
