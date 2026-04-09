@@ -112,9 +112,16 @@ fun HomeScreen(
         )
 
     val permission = permissions   // 保持下方兼容使用
+    var pendingGalaxyNav by remember { mutableStateOf(false) }
 
     LaunchedEffect(permissions.allPermissionsGranted) {
-        if (permissions.allPermissionsGranted) vm.startScan(context)
+        if (permissions.allPermissionsGranted) {
+            vm.startScan(context)
+            if (pendingGalaxyNav) {
+                pendingGalaxyNav = false
+                navController.navigate("galaxy")
+            }
+        }
     }
 
     // 全屏深空背景 + 右上角紫色光晕 + 左中青绿光晕
@@ -209,7 +216,10 @@ fun HomeScreen(
                     bgBrush     = Brush.linearGradient(
                         listOf(Color(0x50007860), Color(0x60004D44))
                     ),
-                    onClick     = { navController.navigate("galaxy") }
+                    onClick     = {
+                        if (permissions.allPermissionsGranted) navController.navigate("galaxy")
+                        else { pendingGalaxyNav = true; permissions.launchMultiplePermissionRequest() }
+                    }
                 )
             }
 
