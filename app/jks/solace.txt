@@ -1,0 +1,9 @@
+
+Variant: release
+Config: solace
+Store: /Volumes/SD/project/Solace/app/jks/solace.jks
+Alias: solace
+MD5: 5F:99:D8:AE:E3:43:9E:80:3A:0A:97:9D:E6:07:54:78
+SHA1: 47:21:7E:50:7A:FE:D8:54:09:6A:10:D8:10:9A:48:D7:2F:18:EF:E9
+SHA-256: 3F:F1:6A:DB:66:F7:F4:ED:B4:1D:3D:59:76:01:C7:43:E6:21:99:9A:16:13:D0:7A:7F:37:DC:0E:C1:67:25:63
+Valid until: 2051年4月1日星期六
