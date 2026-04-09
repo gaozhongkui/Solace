@@ -77,8 +77,6 @@
 public static *** v(...);
 public static *** i(...);
 public static *** d(...);
-public static *** w(...);
-public static *** e(...);
 }
 
 ##---------------Begin: proguard configuration for Gson  ----------
@@ -178,3 +176,16 @@ public static *** e(...);
 
 
 -keep class io.nekohasekai.libbox.** { *; }
+
+# ── sing-box / VPN 相关 ────────────────────────────────────────────────────────
+# AIDL 生成类：Stub 通过反射绑定 IPC，类名和方法名不能被混淆
+-keep class com.getsolace.ai.aidl.** { *; }
+-keep interface com.getsolace.ai.aidl.** { *; }
+
+# SingBoxService：Service 组件 + onBind + 内部 binder 实现
+-keep class com.getsolace.ai.chat.network.SingBoxService { *; }
+-keep class com.getsolace.ai.chat.network.SingBoxManager { *; }
+
+# 通用 AIDL 保护：所有 Binder Stub / IInterface 实现
+-keep class * extends android.os.Binder { *; }
+-keep interface * extends android.os.IInterface { *; }
