@@ -125,10 +125,6 @@ dependencies {
     // Compose Material Icons Extended
     implementation("androidx.compose.material:material-icons-extended:1.6.8")
 
-    // 引入基础翻译 SDK
-    implementation("com.huawei.hms:ml-computer-translate:3.11.0.302")
-
-
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -143,4 +139,3 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
 }
-
