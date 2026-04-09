@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.getsolace.ai.chat.SolaceApplication
 import com.getsolace.ai.chat.data.*
 import com.getsolace.ai.chat.network.AppNetworkClient
+import com.getsolace.ai.chat.network.TranslateUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -147,8 +148,8 @@ class AIViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private fun buildFullPrompt(): String {
-        val base   = _prompt.value.trim()
+    private suspend fun buildFullPrompt(): String {
+        val base   = TranslateUtil.toEn(_prompt.value.trim())
         val suffix = _selectedStyle.value.promptSuffix
         return "$base$suffix"
     }

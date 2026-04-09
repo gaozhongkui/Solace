@@ -129,11 +129,12 @@ fun AILabFeedScreen() {
                             onClick = {
                                 context.startActivity(
                                     FeedItemDetailActivity.newIntent(
-                                        context  = context,
-                                        imageUrl = feedItem.imageUrl,
-                                        prompt   = feedItem.prompt,
-                                        width    = feedItem.width,
-                                        height   = feedItem.height
+                                        context   = context,
+                                        imageUrl  = feedItem.imageUrl,
+                                        prompt    = feedItem.prompt,
+                                        promptCn  = feedItem.promptCn,
+                                        width     = feedItem.width,
+                                        height    = feedItem.height
                                     )
                                 )
                             }
@@ -181,7 +182,7 @@ fun FeedImageCard(item: FeedItem, onClick: () -> Unit) {
     ) {
         SolaceAsyncImage(
             model              = item.imageUrl,
-            contentDescription = item.prompt,
+            contentDescription = item.displayPrompt,
             contentScale       = ContentScale.Crop,
             modifier           = Modifier.fillMaxSize(),
             shape              = RoundedCornerShape(AppRadius.md)
@@ -199,7 +200,7 @@ fun FeedImageCard(item: FeedItem, onClick: () -> Unit) {
                 .padding(AppSpacing.sm)
         ) {
             Text(
-                item.prompt,
+                item.displayPrompt,
                 style    = MaterialTheme.typography.bodySmall.copy(
                     color    = TextPrimary,
                     fontSize = AppFontSize.caption2

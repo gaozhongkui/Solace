@@ -3,6 +3,7 @@ package com.getsolace.ai.chat.data
 import android.util.Log
 import com.getsolace.ai.chat.network.AppNetworkClient
 import com.getsolace.ai.chat.network.SingBoxManager
+import com.getsolace.ai.chat.network.TranslateUtil
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,12 +17,15 @@ data class FeedItem(
     val id: String,
     val imageUrl: String,
     val prompt: String,
+    val promptCn: String = "",
     val width: Int = 512,
     val height: Int = 512,
     val model: String = "flux",
     val seed: Long = 0L
 ) {
     val aspectRatio: Float get() = if (height > 0) width.toFloat() / height.toFloat() else 1f
+    /** 优先展示中文译文，无译文时退回英文原文 */
+    val displayPrompt: String get() = promptCn.ifBlank { prompt }
 }
 
 // ─── UnifiedFeedManager ───────────────────────────────────────────────────────
@@ -194,17 +198,24 @@ object UnifiedFeedManager {
         }
     }
 
-    private fun parseItem(json: String): FeedItem? {
+    private suspend fun parseItem(json: String): FeedItem? {
         return try {
             val obj = JSONObject(json)
             if (obj.optString("status") != "end_generating") return null
             if (obj.optBoolean("nsfw", false)) return null
 
             val imageUrl = obj.optString("imageURL").takeIf { it.isNotEmpty() } ?: return null
+            val prompt = obj.optString("prompt", "")
+            // 翻译超时 3s，超时或失败时退回原文
+            val promptCn = withTimeoutOrNull(3_000) {
+                TranslateUtil.toZh(prompt)
+            } ?: prompt
+
             FeedItem(
                 id = imageUrl.hashCode().toString(),
                 imageUrl = imageUrl,
-                prompt = obj.optString("prompt", ""),
+                prompt = prompt,
+                promptCn = promptCn,
                 width = obj.optInt("width", 512).coerceIn(64, 2048),
                 height = obj.optInt("height", 512).coerceIn(64, 2048),
                 model = obj.optString("model", "flux").ifEmpty { "flux" },

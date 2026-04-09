@@ -45,18 +45,21 @@ class FeedItemDetailActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_IMAGE_URL = "extra_image_url"
         private const val EXTRA_PROMPT    = "extra_prompt"
+        private const val EXTRA_PROMPT_CN = "extra_prompt_cn"
         private const val EXTRA_WIDTH     = "extra_width"
         private const val EXTRA_HEIGHT    = "extra_height"
 
         fun newIntent(
-            context  : Context,
-            imageUrl : String,
-            prompt   : String,
-            width    : Int = 512,
-            height   : Int = 512
+            context   : Context,
+            imageUrl  : String,
+            prompt    : String,
+            promptCn  : String = "",
+            width     : Int = 512,
+            height    : Int = 512
         ): Intent = Intent(context, FeedItemDetailActivity::class.java).apply {
             putExtra(EXTRA_IMAGE_URL, imageUrl)
             putExtra(EXTRA_PROMPT,    prompt)
+            putExtra(EXTRA_PROMPT_CN, promptCn)
             putExtra(EXTRA_WIDTH,     width)
             putExtra(EXTRA_HEIGHT,    height)
         }
@@ -66,20 +69,24 @@ class FeedItemDetailActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val imageUrl = intent.getStringExtra(EXTRA_IMAGE_URL) ?: ""
-        val prompt   = intent.getStringExtra(EXTRA_PROMPT)    ?: ""
-        val width    = intent.getIntExtra(EXTRA_WIDTH,  512)
-        val height   = intent.getIntExtra(EXTRA_HEIGHT, 512)
+        val imageUrl  = intent.getStringExtra(EXTRA_IMAGE_URL) ?: ""
+        val prompt    = intent.getStringExtra(EXTRA_PROMPT)    ?: ""
+        val promptCn  = intent.getStringExtra(EXTRA_PROMPT_CN) ?: ""
+        val width     = intent.getIntExtra(EXTRA_WIDTH,  512)
+        val height    = intent.getIntExtra(EXTRA_HEIGHT, 512)
+        // 展示中文译文，无译文时退回英文原文
+        val displayPrompt = promptCn.ifBlank { prompt }
 
         setContent {
             SolaceTheme {
                 FeedItemDetailScreen(
-                    imageUrl = imageUrl,
-                    prompt   = prompt,
-                    width    = width,
-                    height   = height,
-                    onBack   = { finish() },
-                    onUsePrompt = { p ->
+                    imageUrl      = imageUrl,
+                    prompt        = displayPrompt,
+                    promptForEdit = promptCn.ifBlank { prompt },
+                    width         = width,
+                    height        = height,
+                    onBack        = { finish() },
+                    onUsePrompt   = { p ->
                         startActivity(CreateAIActivity.newIntent(this, p))
                         finish()
                     }
@@ -93,12 +100,13 @@ class FeedItemDetailActivity : ComponentActivity() {
 
 @Composable
 private fun FeedItemDetailScreen(
-    imageUrl    : String,
-    prompt      : String,
-    width       : Int,
-    height      : Int,
-    onBack      : () -> Unit,
-    onUsePrompt : (String) -> Unit
+    imageUrl      : String,
+    prompt        : String,   // 用于展示（中文译文或原文）
+    promptForEdit : String,   // 传给 CreateAI 的提示词（中文，ViewModel 翻英文）
+    width         : Int,
+    height        : Int,
+    onBack        : () -> Unit,
+    onUsePrompt   : (String) -> Unit
 ) {
     var scale        by remember { mutableFloatStateOf(1f) }
     var offset       by remember { mutableStateOf(Offset.Zero) }
@@ -246,7 +254,7 @@ private fun FeedItemDetailScreen(
                             )
                             Spacer(Modifier.height(AppSpacing.md))
                             Button(
-                                onClick  = { onUsePrompt(prompt) },
+                                onClick  = { onUsePrompt(promptForEdit) },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape    = RoundedCornerShape(AppRadius.sm),
                                 colors   = ButtonDefaults.buttonColors(containerColor = AccentPrimary)
