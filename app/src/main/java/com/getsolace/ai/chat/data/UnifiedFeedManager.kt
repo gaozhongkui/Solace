@@ -1,6 +1,8 @@
 package com.getsolace.ai.chat.data
 
+import android.util.Log
 import com.getsolace.ai.chat.network.AppNetworkClient
+import com.getsolace.ai.chat.network.SingBoxManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,22 +16,18 @@ data class FeedItem(
     val id: String,
     val imageUrl: String,
     val prompt: String,
-    val width: Int    = 512,
-    val height: Int   = 512,
+    val width: Int = 512,
+    val height: Int = 512,
     val model: String = "flux",
-    val seed: Long    = 0L
+    val seed: Long = 0L
 ) {
     val aspectRatio: Float get() = if (height > 0) width.toFloat() / height.toFloat() else 1f
 }
 
 // ─── UnifiedFeedManager (mirrors iOS UnifiedFeedManager.swift) ────────────────
-//
-// Manages a public image feed from CivitAI (primary) with Pollinations fallback.
-// Mirrors iOS: CivitAI cursor-based pagination, 200-item memory limit,
-// 60s health check, dedup by URL.
 
 object UnifiedFeedManager {
-
+    private const val TAG = "UnifiedFeedManager"
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var fetchJob: Job? = null
     private var healthJob: Job? = null
@@ -48,12 +46,8 @@ object UnifiedFeedManager {
     private val _isLoadingMore = MutableStateFlow(false)
     val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
 
-    // Cursor for CivitAI pagination (null = first page)
     private var nextCursor: String? = null
-
     private var isInitialized = false
-
-    // ── Start / Stop ──────────────────────────────────────────────────────────
 
     fun start() {
         if (isInitialized) return
@@ -68,8 +62,6 @@ object UnifiedFeedManager {
         isInitialized = false
     }
 
-    // ── Refresh (reset cursor, reload from first page) ────────────────────────
-
     fun loadFeed() {
         if (_isLoading.value) return
         fetchJob?.cancel()
@@ -79,19 +71,18 @@ object UnifiedFeedManager {
             try {
                 val newItems = fetchCivitAIFeed(cursor = null)
                 if (newItems.isNotEmpty()) {
-                    prependItems(newItems)
-                } else {
+                    _items.value = newItems
+                } else if (_items.value.isEmpty()) {
                     appendItems(generateFallbackItems())
                 }
             } catch (e: Exception) {
-                appendItems(generateFallbackItems())
+                Log.e(TAG, "loadFeed 异常: ${e.message}")
+                if (_items.value.isEmpty()) appendItems(generateFallbackItems())
             } finally {
                 _isLoading.value = false
             }
         }
     }
-
-    // ── Load more (next page via cursor) ─────────────────────────────────────
 
     fun loadMore() {
         if (_isLoadingMore.value || _isLoading.value) return
@@ -101,159 +92,111 @@ object UnifiedFeedManager {
                 val moreItems = fetchCivitAIFeed(cursor = nextCursor)
                 appendItems(moreItems)
             } catch (e: Exception) {
-                // ignore load-more failures silently
+                Log.e(TAG, "loadMore 失败: ${e.message}")
             } finally {
                 _isLoadingMore.value = false
             }
         }
     }
 
-    // ── CivitAI API fetch (mirrors iOS CivitAIDataSource.swift) ──────────────
-    // GET https://civitai.com/api/v1/images?limit=20&sort=Newest&cursor={cursor}
+    private suspend fun fetchCivitAIFeed(cursor: String?): List<FeedItem> =
+        withContext(Dispatchers.IO) {
+            val url = buildString {
+                append("$CIVITAI_BASE?limit=$PAGE_SIZE&sort=Newest&nsfw=false")
+                if (!cursor.isNullOrEmpty()) append("&cursor=$cursor")
+            }
 
-    private suspend fun fetchCivitAIFeed(cursor: String?): List<FeedItem> = withContext(Dispatchers.IO) {
-        val url = buildString {
-            append("$CIVITAI_BASE?limit=$PAGE_SIZE&sort=Newest&nsfw=false")
-            if (!cursor.isNullOrEmpty()) append("&cursor=$cursor")
+            Log.d(TAG, "fetchCivitAI proxy=${SingBoxManager.isRunning()} url=$url")
+            
+            // 关键：模拟真实浏览器请求头，防止被 Cloudflare/CivitAI 拦截并重置连接
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .header("Accept", "application/json")
+                .header("Referer", "https://civitai.com/")
+                .build()
+
+            val response = try {
+                AppNetworkClient.execute(request)
+            } catch (e: Exception) {
+                Log.e(TAG, "fetchCivitAI 网络异常 (${e.javaClass.simpleName}): ${e.message}")
+                return@withContext emptyList()
+            }
+
+            if (!response.isSuccessful) {
+                Log.e(TAG, "fetchCivitAI HTTP ${response.code} ${response.message}")
+                response.close()
+                return@withContext emptyList()
+            }
+
+            val body = response.body?.string() ?: return@withContext emptyList()
+            try {
+                val json = JSONObject(body)
+                val metadata = json.optJSONObject("metadata")
+                nextCursor = metadata?.optString("nextCursor")?.takeIf { it.isNotEmpty() }
+
+                val itemsArray = json.optJSONArray("items") ?: return@withContext emptyList()
+                val parsedItems = mutableListOf<FeedItem>()
+                
+                for (i in 0 until itemsArray.length()) {
+                    val item = itemsArray.optJSONObject(i) ?: continue
+                    val imageUrl = item.optString("url").takeIf { it.isNotEmpty() } ?: continue
+                    if (item.optBoolean("nsfw", false)) continue
+
+                    val meta = item.optJSONObject("meta")
+                    val width = item.optInt("width", 512).coerceIn(64, 2048)
+                    val height = item.optInt("height", 512).coerceIn(64, 2048)
+                    
+                    parsedItems.add(FeedItem(
+                        id = item.optInt("id", 0).toString(),
+                        imageUrl = civitaiThumbnailUrl(imageUrl, width),
+                        prompt = meta?.optString("prompt") ?: "",
+                        width = width,
+                        height = height,
+                        model = meta?.optString("model") ?: "flux",
+                        seed = meta?.optLong("seed") ?: Random.nextLong(100000)
+                    ))
+                }
+                parsedItems
+            } catch (e: Exception) {
+                Log.e(TAG, "解析 CivitAI JSON 失败: ${e.message}")
+                emptyList()
+            }
         }
-
-        val request = Request.Builder().url(url).build()
-        val response = AppNetworkClient.execute(request)
-
-        if (!response.isSuccessful) return@withContext emptyList()
-
-        val body = response.body?.string() ?: return@withContext emptyList()
-        val json = JSONObject(body)
-
-        // Save next cursor for pagination
-        val metadata = json.optJSONObject("metadata")
-        nextCursor = metadata?.optString("nextCursor")?.takeIf { it.isNotEmpty() }
-
-        val items = json.optJSONArray("items") ?: return@withContext emptyList()
-
-        (0 until items.length()).mapNotNull { i ->
-            val item = items.optJSONObject(i) ?: return@mapNotNull null
-            val imageUrl = item.optString("url").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-
-            // Skip NSFW
-            if (item.optBoolean("nsfw", false)) return@mapNotNull null
-
-            val meta = item.optJSONObject("meta")
-            val prompt = meta?.optString("prompt") ?: ""
-            val width = item.optInt("width", 512).coerceIn(64, 2048)
-            val height = item.optInt("height", 512).coerceIn(64, 2048)
-            val model = meta?.optString("model") ?: "flux"
-            val seed = meta?.optLong("seed") ?: Random.nextLong(100000)
-
-            FeedItem(
-                id       = item.optInt("id", 0).toString(),
-                imageUrl = civitaiThumbnailUrl(imageUrl, width),
-                prompt   = prompt,
-                width    = width,
-                height   = height,
-                model    = model,
-                seed     = seed
-            )
-        }
-    }
-
-    // ── Prepend new items to top (for refresh) ────────────────────────────────
 
     private fun prependItems(newItems: List<FeedItem>) {
         val existing = _items.value
         val existingUrls = existing.map { it.imageUrl }.toSet()
         val unique = newItems.filter { it.imageUrl !in existingUrls }
-        val merged = (unique + existing).take(MAX_ITEMS)
-        _items.value = merged
+        _items.value = (unique + existing).take(MAX_ITEMS)
     }
-
-    // ── Append items to bottom (for load-more / fallback) ────────────────────
 
     private fun appendItems(newItems: List<FeedItem>) {
         val existing = _items.value
         val existingUrls = existing.map { it.imageUrl }.toSet()
         val unique = newItems.filter { it.imageUrl !in existingUrls }
-        val merged = (existing + unique).takeLast(MAX_ITEMS)
-        _items.value = merged
+        _items.value = (existing + unique).takeLast(MAX_ITEMS)
     }
-
-    // ── Health check (60s, mirrors iOS) ──────────────────────────────────────
 
     private fun startHealthCheck() {
         healthJob = scope.launch {
             while (isActive) {
                 delay(HEALTH_CHECK_INTERVAL_MS)
-                if (_items.value.size < 20) {
-                    loadFeed()
-                }
+                if (_items.value.size < 10) loadFeed()
             }
         }
     }
 
-    // ── CivitAI CDN 缩略图 URL ────────────────────────────────────────────────
-    //
-    // CivitAI 使用 Cloudflare Image CDN，支持在路径中插入 width 参数：
-    // 原图: https://image.civitai.com/{hash}/filename.jpeg
-    // 缩略图: https://image.civitai.com/{hash}/width=450/filename.jpeg
-    //
-    // 限制最大 450px 宽（2 列瀑布流单列约 500px@2.5x，取略小值减少流量）
-    // 仅处理 image.civitai.com，其他 URL 原样返回
-
     private fun civitaiThumbnailUrl(url: String, originalWidth: Int): String {
-        if (!url.contains("image.civitai.com")) return url
-        // 原图已经较小时不插入 width 参数（避免放大）
-        if (originalWidth <= 450) return url
+        if (!url.contains("image.civitai.com") || originalWidth <= 450) return url
         val lastSlash = url.lastIndexOf('/')
         if (lastSlash < 0) return url
         return url.substring(0, lastSlash) + "/width=450/" + url.substring(lastSlash + 1)
     }
 
-    // ── Pollinations fallback (when CivitAI unavailable) ─────────────────────
-
     private fun generateFallbackItems(): List<FeedItem> {
-        val prompts = listOf(
-            "beautiful mountain landscape at sunset, cinematic",
-            "futuristic cityscape with neon lights, cyberpunk",
-            "abstract colorful watercolor painting, artistic",
-            "cute anime girl in a flower field, studio ghibli style",
-            "epic fantasy dragon in misty mountains",
-            "underwater coral reef photography, vibrant",
-            "minimalist geometric pattern, modern design",
-            "vintage portrait photography, warm tones",
-            "space galaxy nebula with stars, astronomy",
-            "cherry blossom japanese garden, serene",
-            "steampunk mechanical clockwork, detailed",
-            "magical forest with glowing mushrooms",
-            "surreal dreamlike landscape, Salvador Dali style",
-            "photorealistic cat portrait, professional",
-            "ancient ruins at golden hour, archaeological",
-            "cozy coffee shop interior, warm lighting",
-            "northern lights aurora borealis, Iceland",
-            "crystal cave with colorful minerals",
-            "traditional Chinese ink painting",
-            "modern abstract art with bold colors"
-        )
-        val widths  = listOf(512, 768, 512, 896)
-        val heights = listOf(512, 512, 768, 504)
-        val models  = listOf("flux", "turbo", "flux-realism")
-
-        return prompts.mapIndexed { idx, prompt ->
-            val seed    = Random.nextLong(100000)
-            val wIdx    = idx % widths.size
-            val width   = widths[wIdx]
-            val height  = heights[wIdx]
-            val model   = models[idx % models.size]
-            val encoded = java.net.URLEncoder.encode(prompt, "UTF-8")
-            val url     = "https://image.pollinations.ai/prompt/$encoded?width=$width&height=$height&seed=$seed&model=$model&nologo=true"
-            FeedItem(
-                id       = "fallback_${seed}_$idx",
-                imageUrl = url,
-                prompt   = prompt,
-                width    = width,
-                height   = height,
-                model    = model,
-                seed     = seed
-            )
+        return listOf("beautiful landscape", "cyberpunk city", "anime girl").mapIndexed { idx, p ->
+            FeedItem("fb_$idx", "https://image.pollinations.ai/prompt/$p", p)
         }
     }
 }

@@ -175,3 +175,6 @@ public static *** e(...);
     public static ** newInstance(...);
     public static ** getDefaultInstance();
 }
+
+
+-keep class io.nekohasekai.libbox.** { *; }

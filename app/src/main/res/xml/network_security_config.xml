@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- 允许本地代理流量 -->
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <!-- 允许测试地址 -->
+        <domain includeSubdomains="true">connectivitycheck.gstatic.com</domain>
+    </domain-config>
+</network-security-config>

@@ -29,6 +29,7 @@ import com.getsolace.ai.chat.R
 import com.getsolace.ai.chat.data.AIGeneratedImage
 import com.getsolace.ai.chat.data.FeedItem
 import com.getsolace.ai.chat.data.UnifiedFeedManager
+import com.getsolace.ai.chat.network.SingBoxManager
 import com.getsolace.ai.chat.ui.components.ShimmerBox
 import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 
@@ -40,9 +41,15 @@ fun AILabFeedScreen() {
     val feedItems     by UnifiedFeedManager.items.collectAsStateWithLifecycle()
     val isFeedLoading by UnifiedFeedManager.isLoading.collectAsStateWithLifecycle()
     val isLoadingMore by UnifiedFeedManager.isLoadingMore.collectAsStateWithLifecycle()
+    val proxyRunning  by SingBoxManager.isRunningFlow.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) { UnifiedFeedManager.start() }
+
+    // 代理就绪后重新拉取 feed，避免停留在 Pollinations 兜底数据
+    LaunchedEffect(proxyRunning) {
+        if (proxyRunning) UnifiedFeedManager.loadFeed()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {

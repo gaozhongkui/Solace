@@ -19,9 +19,12 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import android.util.Log
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
+import com.getsolace.ai.chat.network.SingBoxManager
 import com.getsolace.ai.chat.ui.theme.CardBg
 import com.getsolace.ai.chat.ui.theme.CardBgAlt
 import com.getsolace.ai.chat.ui.theme.TextDisabled
@@ -75,7 +78,19 @@ fun SolaceAsyncImage(
     contentScale: ContentScale = ContentScale.Crop,
     shape: Shape = RoundedCornerShape(0.dp),
 ) {
-    var state by remember(model) { mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Loading(null)) }
+    val context = LocalContext.current
+    // 代理运行状态变化时，memoryCacheKey 跟着变，Coil 会对失败图片自动重试
+    val proxyRunning by SingBoxManager.isRunningFlow.collectAsStateWithLifecycle()
+    val proxySuffix = if (proxyRunning) "p" else "d"
+
+    val request = remember(model, proxySuffix) {
+        ImageRequest.Builder(context)
+            .data(model)
+            .memoryCacheKey("${model}_$proxySuffix")
+            .build()
+    }
+
+    var state by remember(model, proxySuffix) { mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Loading(null)) }
 
     Box(modifier = modifier) {
         // Shimmer shown while loading
@@ -98,11 +113,19 @@ fun SolaceAsyncImage(
         }
 
         AsyncImage(
-            model              = model,
+            model              = request,
             contentDescription = contentDescription,
             contentScale       = contentScale,
             modifier           = Modifier.matchParentSize(),
-            onState            = { state = it }
+            onState            = {
+                state = it
+                if (it is AsyncImagePainter.State.Error) {
+                    Log.e("SolaceImage", "加载失败 url=$model proxy=$proxyRunning err=${it.result.throwable?.message}")
+                }
+                if (it is AsyncImagePainter.State.Success) {
+                    Log.d("SolaceImage", "加载成功 url=$model proxy=$proxyRunning")
+                }
+            }
         )
     }
 }
@@ -117,11 +140,30 @@ fun SolaceAsyncImage(
     contentScale: ContentScale = ContentScale.Crop,
     shape: Shape = RoundedCornerShape(0.dp),
 ) {
-    SolaceAsyncImage(
-        model              = request,
-        contentDescription = contentDescription,
-        modifier           = modifier,
-        contentScale       = contentScale,
-        shape              = shape,
-    )
+    var state by remember(request) { mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Loading(null)) }
+
+    Box(modifier = modifier) {
+        if (state is AsyncImagePainter.State.Loading) {
+            ShimmerBox(modifier = Modifier.matchParentSize(), shape = shape)
+        }
+        if (state is AsyncImagePainter.State.Error) {
+            Box(
+                modifier         = Modifier.matchParentSize().clip(shape).background(CardBgAlt),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector        = Icons.Default.BrokenImage,
+                    contentDescription = null,
+                    tint               = TextDisabled.copy(alpha = 0.4f)
+                )
+            }
+        }
+        AsyncImage(
+            model              = request,
+            contentDescription = contentDescription,
+            contentScale       = contentScale,
+            modifier           = Modifier.matchParentSize(),
+            onState            = { state = it }
+        )
+    }
 }

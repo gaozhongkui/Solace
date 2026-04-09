@@ -12,11 +12,13 @@ import com.getsolace.ai.chat.api.StrategyCacheManager
 import com.getsolace.ai.chat.api.StrategyRepository
 import com.getsolace.ai.chat.data.AppStrategy
 import com.getsolace.ai.chat.network.AppNetworkClient
+import com.getsolace.ai.chat.network.SingBoxManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 class SolaceApplication : Application(), ImageLoaderFactory {
@@ -50,10 +52,20 @@ class SolaceApplication : Application(), ImageLoaderFactory {
             config  = config
         )
 
+        // ── 绑定 sing-box 本地代理服务 ────────────────────────────────────────
+        SingBoxManager.bind(this)
+
         // ── 启动策略拉取（优先缓存，后台更新） ──────────────────────────────
         appScope.launch {
             strategyRepository.getStrategy(forceRefresh = true)
                 .onSuccess { _strategyFlow.value = it }
+        }
+
+        // ── 策略到达后热重载 sing-box 配置 ───────────────────────────────────
+        appScope.launch {
+            strategyFlow.filterNotNull().collect {
+                SingBoxManager.loadConfigFromStrategy()
+            }
         }
     }
 
