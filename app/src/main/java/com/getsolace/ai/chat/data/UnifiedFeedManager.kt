@@ -6,11 +6,11 @@ import com.getsolace.ai.chat.network.SingBoxManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import okhttp3.Request
 import org.json.JSONObject
-import kotlin.random.Random
 
-// ─── Feed Item (mirrors iOS PollinationFeedItem) ──────────────────────────────
+// ─── Feed Item ────────────────────────────────────────────────────────────────
 
 data class FeedItem(
     val id: String,
@@ -24,21 +24,30 @@ data class FeedItem(
     val aspectRatio: Float get() = if (height > 0) width.toFloat() / height.toFloat() else 1f
 }
 
-// ─── UnifiedFeedManager (mirrors iOS UnifiedFeedManager.swift) ────────────────
+// ─── UnifiedFeedManager ───────────────────────────────────────────────────────
 
 object UnifiedFeedManager {
     private const val TAG = "UnifiedFeedManager"
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var fetchJob: Job? = null
-    private var healthJob: Job? = null
+    private var streamJob: Job? = null
 
     private const val MAX_ITEMS = 200
-    private const val PAGE_SIZE = 20
-    private const val HEALTH_CHECK_INTERVAL_MS = 5 * 60_000L
-    private const val CIVITAI_BASE = "https://civitai.com/api/v1/images"
+    private const val INITIAL_FILL_COUNT = 10   // 首次填充条数
+    private const val FEED_URL = "https://image.pollinations.ai/feed"
+    private const val MAX_RETRIES = 3
+    private const val RETRY_DELAY_MS = 3_000L
 
+    // 主列表：首次 10 条展示给用户
     private val _items = MutableStateFlow<List<FeedItem>>(emptyList())
     val items: StateFlow<List<FeedItem>> = _items
+
+    // 缓冲区：首次填充后收到的新数据
+    private val bufferLock = Any()
+    private val buffer = mutableListOf<FeedItem>()
+
+    // UI 可观察缓冲区数量，用于显示「加载更多」按钮或角标
+    private val _bufferCount = MutableStateFlow(0)
+    val bufferCount: StateFlow<Int> = _bufferCount
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -46,152 +55,164 @@ object UnifiedFeedManager {
     private val _isLoadingMore = MutableStateFlow(false)
     val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
 
-    private var nextCursor: String? = null
     private var isInitialized = false
+    @Volatile private var initialFilled = false
 
     fun start() {
         if (isInitialized) return
         isInitialized = true
-        loadFeed()
-        startHealthCheck()
+        connectStream()
     }
 
     fun stop() {
-        fetchJob?.cancel()
-        healthJob?.cancel()
+        streamJob?.cancel()
         isInitialized = false
     }
 
     fun loadFeed() {
-        if (_isLoading.value) return
-        fetchJob?.cancel()
-        fetchJob = scope.launch {
-            _isLoading.value = true
-            nextCursor = null
-            try {
-                val newItems = fetchCivitAIFeed(cursor = null)
-                if (newItems.isNotEmpty()) {
-                    _items.value = newItems
-                } else if (_items.value.isEmpty()) {
-                    appendItems(generateFallbackItems())
+        streamJob?.cancel()
+        _items.value = emptyList()
+        initialFilled = false
+        synchronized(bufferLock) {
+            buffer.clear()
+            _bufferCount.value = 0
+        }
+        connectStream()
+    }
+
+    /** 将缓冲区数据追加到列表末尾
+     *  - 缓冲区有数据：直接追加，无 loading
+     *  - 缓冲区为空：显示 loading，等待 SSE 推送新数据后再追加（最多等 30s）
+     */
+    fun loadMore() {
+        if (_isLoadingMore.value) return
+        scope.launch {
+            if (_bufferCount.value == 0) {
+                _isLoadingMore.value = true
+                // 等待 SSE 推送至少一条进入缓冲区，超时 30s 自动放弃
+                withTimeoutOrNull(30_000) {
+                    _bufferCount.first { it > 0 }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "loadFeed 异常: ${e.message}")
-                if (_items.value.isEmpty()) appendItems(generateFallbackItems())
-            } finally {
+            }
+            flushBuffer()
+            _isLoadingMore.value = false
+        }
+    }
+
+    private fun flushBuffer() {
+        val toAdd = synchronized(bufferLock) {
+            val copy = buffer.toList()
+            buffer.clear()
+            _bufferCount.value = 0
+            copy
+        }
+        if (toAdd.isEmpty()) return
+        val existing = _items.value
+        val existingUrls = existing.map { it.imageUrl }.toSet()
+        val unique = toAdd.filter { it.imageUrl !in existingUrls }
+        if (unique.isNotEmpty()) {
+            _items.value = (existing + unique).take(MAX_ITEMS)
+        }
+    }
+
+    private fun connectStream() {
+        streamJob = scope.launch {
+            var failCount = 0
+            while (isActive && failCount < MAX_RETRIES) {
+                _isLoading.value = true
+                val success = readStream()
+                _isLoading.value = false
+                if (success) {
+                    failCount = 0
+                } else {
+                    failCount++
+                    if (isActive && failCount < MAX_RETRIES) delay(RETRY_DELAY_MS)
+                }
+            }
+            if (_items.value.isEmpty()) {
+                _items.value = generateFallbackItems()
+            }
+        }
+    }
+
+    private suspend fun readStream(): Boolean = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(FEED_URL)
+            .header("Accept", "text/event-stream")
+            .header("Cache-Control", "no-cache")
+            .build()
+
+        Log.d(TAG, "连接 Pollinations SSE proxy=${SingBoxManager.isRunning()}")
+
+        try {
+            AppNetworkClient.execute(request, connectSec = 15, readSec = 3600, writeSec = 15).use { response ->
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "SSE 连接失败: HTTP ${response.code}")
+                    return@withContext false
+                }
+
+                val source = response.body?.source() ?: return@withContext false
+
+                while (isActive && !source.exhausted()) {
+                    val line = source.readUtf8Line() ?: break
+                    if (!line.startsWith("data:")) continue
+
+                    val jsonStr = line.removePrefix("data:").trim()
+                    if (jsonStr.isEmpty()) continue
+
+                    val item = parseItem(jsonStr) ?: continue
+                    dispatchItem(item)
+                }
+                true
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "SSE 异常: ${e.javaClass.simpleName} - ${e.message}")
+            false
+        }
+    }
+
+    /** 未完成首次填充 → 追加到主列表；首次填满后所有新数据 → 缓冲区 */
+    private fun dispatchItem(item: FeedItem) {
+        if (!initialFilled) {
+            val current = _items.value
+            if (current.any { it.imageUrl == item.imageUrl }) return
+            val updated = current + item
+            _items.value = updated
+            if (updated.size >= INITIAL_FILL_COUNT) {
+                initialFilled = true
                 _isLoading.value = false
             }
-        }
-    }
-
-    fun loadMore() {
-        if (_isLoadingMore.value || _isLoading.value) return
-        scope.launch {
-            _isLoadingMore.value = true
-            try {
-                val moreItems = fetchCivitAIFeed(cursor = nextCursor)
-                appendItems(moreItems)
-            } catch (e: Exception) {
-                Log.e(TAG, "loadMore 失败: ${e.message}")
-            } finally {
-                _isLoadingMore.value = false
-            }
-        }
-    }
-
-    private suspend fun fetchCivitAIFeed(cursor: String?): List<FeedItem> =
-        withContext(Dispatchers.IO) {
-            val url = buildString {
-                append("$CIVITAI_BASE?limit=$PAGE_SIZE&sort=Newest&nsfw=false")
-                if (!cursor.isNullOrEmpty()) append("&cursor=$cursor")
-            }
-
-            Log.d(TAG, "fetchCivitAI proxy=${SingBoxManager.isRunning()} url=$url")
-            
-            // 关键：模拟真实浏览器请求头，防止被 Cloudflare/CivitAI 拦截并重置连接
-            val request = Request.Builder()
-                .url(url)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                .header("Accept", "application/json")
-                .header("Referer", "https://civitai.com/")
-                .build()
-
-            val response = try {
-                AppNetworkClient.execute(request, connectSec = 15, readSec = 20, writeSec = 15)
-            } catch (e: Exception) {
-                Log.e(TAG, "fetchCivitAI 网络异常 (${e.javaClass.simpleName}): ${e.message}")
-                return@withContext emptyList()
-            }
-
-            if (!response.isSuccessful) {
-                Log.e(TAG, "fetchCivitAI HTTP ${response.code} ${response.message}")
-                response.close()
-                return@withContext emptyList()
-            }
-
-            val body = response.body?.string() ?: return@withContext emptyList()
-            try {
-                val json = JSONObject(body)
-                val metadata = json.optJSONObject("metadata")
-                nextCursor = metadata?.optString("nextCursor")?.takeIf { it.isNotEmpty() }
-
-                val itemsArray = json.optJSONArray("items") ?: return@withContext emptyList()
-                val parsedItems = mutableListOf<FeedItem>()
-                
-                for (i in 0 until itemsArray.length()) {
-                    val item = itemsArray.optJSONObject(i) ?: continue
-                    val imageUrl = item.optString("url").takeIf { it.isNotEmpty() } ?: continue
-                    if (item.optBoolean("nsfw", false)) continue
-
-                    val meta = item.optJSONObject("meta")
-                    val width = item.optInt("width", 512).coerceIn(64, 2048)
-                    val height = item.optInt("height", 512).coerceIn(64, 2048)
-                    
-                    parsedItems.add(FeedItem(
-                        id = item.optInt("id", 0).toString(),
-                        imageUrl = civitaiThumbnailUrl(imageUrl, width),
-                        prompt = meta?.optString("prompt") ?: "",
-                        width = width,
-                        height = height,
-                        model = meta?.optString("model") ?: "flux",
-                        seed = meta?.optLong("seed") ?: Random.nextLong(100000)
-                    ))
+        } else {
+            synchronized(bufferLock) {
+                if (buffer.none { it.imageUrl == item.imageUrl }) {
+                    buffer.add(item)
+                    _bufferCount.value = buffer.size
                 }
-                parsedItems
-            } catch (e: Exception) {
-                Log.e(TAG, "解析 CivitAI JSON 失败: ${e.message}")
-                emptyList()
-            }
-        }
-
-    private fun prependItems(newItems: List<FeedItem>) {
-        val existing = _items.value
-        val existingUrls = existing.map { it.imageUrl }.toSet()
-        val unique = newItems.filter { it.imageUrl !in existingUrls }
-        _items.value = (unique + existing).take(MAX_ITEMS)
-    }
-
-    private fun appendItems(newItems: List<FeedItem>) {
-        val existing = _items.value
-        val existingUrls = existing.map { it.imageUrl }.toSet()
-        val unique = newItems.filter { it.imageUrl !in existingUrls }
-        _items.value = (existing + unique).takeLast(MAX_ITEMS)
-    }
-
-    private fun startHealthCheck() {
-        healthJob = scope.launch {
-            while (isActive) {
-                delay(HEALTH_CHECK_INTERVAL_MS)
-                if (_items.value.size < 10) loadFeed()
             }
         }
     }
 
-    private fun civitaiThumbnailUrl(url: String, originalWidth: Int): String {
-        if (!url.contains("image.civitai.com") || originalWidth <= 450) return url
-        val lastSlash = url.lastIndexOf('/')
-        if (lastSlash < 0) return url
-        return url.substring(0, lastSlash) + "/width=450/" + url.substring(lastSlash + 1)
+    private fun parseItem(json: String): FeedItem? {
+        return try {
+            val obj = JSONObject(json)
+            if (obj.optString("status") != "end_generating") return null
+            if (obj.optBoolean("nsfw", false)) return null
+
+            val imageUrl = obj.optString("imageURL").takeIf { it.isNotEmpty() } ?: return null
+            FeedItem(
+                id = imageUrl.hashCode().toString(),
+                imageUrl = imageUrl,
+                prompt = obj.optString("prompt", ""),
+                width = obj.optInt("width", 512).coerceIn(64, 2048),
+                height = obj.optInt("height", 512).coerceIn(64, 2048),
+                model = obj.optString("model", "flux").ifEmpty { "flux" },
+                seed = obj.optLong("seed", 0L)
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun generateFallbackItems(): List<FeedItem> {

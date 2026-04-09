@@ -41,6 +41,7 @@ fun AILabFeedScreen() {
     val feedItems     by UnifiedFeedManager.items.collectAsStateWithLifecycle()
     val isFeedLoading by UnifiedFeedManager.isLoading.collectAsStateWithLifecycle()
     val isLoadingMore by UnifiedFeedManager.isLoadingMore.collectAsStateWithLifecycle()
+    val bufferCount   by UnifiedFeedManager.bufferCount.collectAsStateWithLifecycle()
     val proxyRunning  by SingBoxManager.isRunningFlow.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -139,20 +140,12 @@ fun AILabFeedScreen() {
                         )
                     }
 
-                    // 加载更多时追加骨架卡片
-                    if (isLoadingMore) {
-                        item {
-                            ShimmerBox(
-                                modifier = Modifier.fillMaxWidth().aspectRatio(0.8f),
-                                shape    = RoundedCornerShape(AppRadius.md)
-                            )
-                        }
-                        item {
-                            ShimmerBox(
-                                modifier = Modifier.fillMaxWidth().aspectRatio(1.3f),
-                                shape    = RoundedCornerShape(AppRadius.md)
-                            )
-                        }
+                    // 列表底部：loading 中 或 有缓冲数据可加载
+                    item(span = StaggeredGridItemSpan.FullLine) {
+                        LoadMoreFooter(
+                            isLoadingMore = isLoadingMore,
+                            bufferCount   = bufferCount
+                        )
                     }
                 }
             }
@@ -245,6 +238,43 @@ fun AIFeedCard(image: AIGeneratedImage) {
             Column {
                 Text(image.styleTitle, style = MaterialTheme.typography.labelSmall.copy(color = AccentPrimary), maxLines = 1)
                 Text(image.prompt,     style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary),   maxLines = 2)
+            }
+        }
+    }
+}
+
+// ─── Load More Footer ─────────────────────────────────────────────────────────
+
+@Composable
+fun LoadMoreFooter(isLoadingMore: Boolean, bufferCount: Int) {
+    Box(
+        modifier          = Modifier
+            .fillMaxWidth()
+            .padding(vertical = AppSpacing.lg),
+        contentAlignment  = Alignment.Center
+    ) {
+        when {
+            isLoadingMore -> {
+                Row(
+                    verticalAlignment    = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+                ) {
+                    CircularProgressIndicator(
+                        color    = AccentPrimary,
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Text(
+                        "正在加载更多...",
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                    )
+                }
+            }
+            bufferCount > 0 -> {
+                Text(
+                    "上拉加载更多 ($bufferCount)",
+                    style = MaterialTheme.typography.bodySmall.copy(color = TextTertiary)
+                )
             }
         }
     }
