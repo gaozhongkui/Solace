@@ -36,7 +36,7 @@ object UnifiedFeedManager {
     private var streamJob: Job? = null
 
     private const val MAX_ITEMS = 200
-    private const val INITIAL_FILL_COUNT = 10   // 首次填充条数
+    private const val INITIAL_FILL_COUNT = 6    // 首次填充条数
     private const val FEED_URL = "https://image.pollinations.ai/feed"
     private const val MAX_RETRIES = 3
     private const val RETRY_DELAY_MS = 3_000L
@@ -61,10 +61,18 @@ object UnifiedFeedManager {
 
     private var isInitialized = false
     @Volatile private var initialFilled = false
+    @Volatile private var usingCacheSnapshot = false  // 当前展示的是缓存快照，等待 SSE 数据替换
 
     fun start() {
         if (isInitialized) return
         isInitialized = true
+        // 先展示缓存，避免首屏空白；SSE 数据到来后会自动替换
+        val cached = FeedCache.load()
+        if (cached.isNotEmpty()) {
+            _items.value = cached
+            usingCacheSnapshot = true
+            // 注意：不设 initialFilled = true，SSE 数据到来时仍会走填充逻辑
+        }
         connectStream()
     }
 
@@ -77,6 +85,7 @@ object UnifiedFeedManager {
         streamJob?.cancel()
         _items.value = emptyList()
         initialFilled = false
+        usingCacheSnapshot = false
         synchronized(bufferLock) {
             buffer.clear()
             _bufferCount.value = 0
@@ -115,7 +124,9 @@ object UnifiedFeedManager {
         val existingUrls = existing.map { it.imageUrl }.toSet()
         val unique = toAdd.filter { it.imageUrl !in existingUrls }
         if (unique.isNotEmpty()) {
-            _items.value = (existing + unique).take(MAX_ITEMS)
+            val updated = (existing + unique).take(MAX_ITEMS)
+            _items.value = updated
+            FeedCache.save(updated)
         }
     }
 
@@ -179,6 +190,14 @@ object UnifiedFeedManager {
 
     /** 未完成首次填充 → 追加到主列表；首次填满后所有新数据 → 缓冲区 */
     private fun dispatchItem(item: FeedItem) {
+        if (usingCacheSnapshot) {
+            // 第一条 SSE 数据到来：用新数据直接替换缓存快照，避免空白闪烁
+            usingCacheSnapshot = false
+            initialFilled = false
+            _items.value = listOf(item)
+            return
+        }
+
         if (!initialFilled) {
             val current = _items.value
             if (current.any { it.imageUrl == item.imageUrl }) return
@@ -187,6 +206,7 @@ object UnifiedFeedManager {
             if (updated.size >= INITIAL_FILL_COUNT) {
                 initialFilled = true
                 _isLoading.value = false
+                FeedCache.save(updated)   // 用最新的 10 条覆盖旧缓存
             }
         } else {
             synchronized(bufferLock) {

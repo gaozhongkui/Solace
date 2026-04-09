@@ -1,5 +1,6 @@
 package com.getsolace.ai.chat
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -12,6 +13,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -27,13 +32,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.getsolace.ai.chat.data.AIGeneratedImage
 import com.getsolace.ai.chat.data.AIImageStore
@@ -104,8 +116,15 @@ private fun AIImageDetailScreen(
     val pagerState = rememberPagerState(initialPage = initialIndex) { images.size }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showFullscreen    by remember { mutableStateOf(false) }
 
-    BackHandler { onBack() }
+    BackHandler {
+        when {
+            showFullscreen    -> showFullscreen = false
+            showDeleteConfirm -> showDeleteConfirm = false
+            else              -> onBack()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -197,8 +216,22 @@ private fun AIImageDetailScreen(
             ) { page ->
                 val img = images.getOrNull(page)
                 if (img != null) {
-                    ImageDetailPage(image = img)
+                    ImageDetailPage(
+                        image       = img,
+                        onImageClick = { showFullscreen = true }
+                    )
                 }
+            }
+        }
+
+        // ── Fullscreen image viewer ───────────────────────────────────────────
+        if (showFullscreen) {
+            val currentImage = images.getOrNull(pagerState.currentPage)
+            if (currentImage != null) {
+                FullscreenImageViewer(
+                    imageUrl  = currentImage.imageUrl,
+                    onDismiss = { showFullscreen = false }
+                )
             }
         }
 
@@ -232,7 +265,7 @@ private fun AIImageDetailScreen(
 // ─── Single page content ──────────────────────────────────────────────────────
 
 @Composable
-private fun ImageDetailPage(image: AIGeneratedImage) {
+private fun ImageDetailPage(image: AIGeneratedImage, onImageClick: () -> Unit = {}) {
     val dateStr = remember(image.createdAt) {
         SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.CHINA).format(Date(image.createdAt))
     }
@@ -251,6 +284,7 @@ private fun ImageDetailPage(image: AIGeneratedImage) {
                 .padding(horizontal = 16.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(CardSurface)
+                .clickable(onClick = onImageClick)
         ) {
             SolaceAsyncImage(
                 model              = image.imageUrl.ifBlank { null },
@@ -308,6 +342,79 @@ private fun ImageDetailPage(image: AIGeneratedImage) {
         }
     }
 }
+
+// ─── Fullscreen image viewer ──────────────────────────────────────────────────
+
+@Composable
+private fun FullscreenImageViewer(imageUrl: String, onDismiss: () -> Unit) {
+    var scale  by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val isZoomed = scale > 1.05f
+
+    val activity = LocalContext.current as Activity
+
+    // 进入时隐藏系统栏
+    LaunchedEffect(Unit) {
+        val ctrl = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+        ctrl.hide(WindowInsetsCompat.Type.systemBars())
+        ctrl.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
+    // 离开时恢复系统栏
+    DisposableEffect(Unit) {
+        onDispose {
+            WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                .show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale  = (scale * zoomChange).coerceIn(1f, 5f)
+        offset = if (scale > 1f) offset + panChange else Offset.Zero
+    }
+
+    Box(
+        modifier          = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .transformable(state = transformState)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        // 未缩放时单击关闭；已缩放时单击复位
+                        if (isZoomed) {
+                            scale = 1f; offset = Offset.Zero
+                        } else {
+                            onDismiss()
+                        }
+                    },
+                    onDoubleTap = {
+                        if (isZoomed) {
+                            scale = 1f; offset = Offset.Zero
+                        } else {
+                            scale = 2.5f
+                        }
+                    }
+                )
+            },
+        contentAlignment  = Alignment.Center
+    ) {
+        SolaceAsyncImage(
+            model              = imageUrl,
+            contentDescription = null,
+            contentScale       = ContentScale.Fit,
+            modifier           = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX       = scale
+                    scaleY       = scale
+                    translationX = offset.x
+                    translationY = offset.y
+                }
+        )
+    }
+}
+
+// ─── Detail info row ──────────────────────────────────────────────────────────
 
 @Composable
 private fun DetailInfoRow(label: String, value: String) {

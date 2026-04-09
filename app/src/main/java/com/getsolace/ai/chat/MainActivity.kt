@@ -42,6 +42,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.getsolace.ai.chat.data.AIImageStore
+import com.getsolace.ai.chat.data.FeedCache
 import com.getsolace.ai.chat.data.AppStrategy
 import com.getsolace.ai.chat.data.VaultStore
 import com.getsolace.ai.chat.ui.screens.ai.AILabFeedScreen
@@ -104,6 +105,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
         AIImageStore.init(applicationContext)
+        FeedCache.init(applicationContext)
         VaultStore.init(applicationContext)
         setContent {
             SolaceTheme {
