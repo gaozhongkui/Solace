@@ -54,6 +54,10 @@ object UnifiedFeedManager {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
+    // 有内容展示时后台拉取新数据的状态（刷新按钮 loading 用）
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing
+
     private val _isLoadingMore = MutableStateFlow(false)
     val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
 
@@ -83,10 +87,9 @@ object UnifiedFeedManager {
         isInitialized = false
     }
 
-    /** 手动刷新：清空当前内容，重新连接 SSE */
+    /** 刷新：保持当前内容可见，后台重新收集 SSE，攒够 INITIAL_FILL_COUNT 条后一次性替换 */
     fun loadFeed() {
         streamJob?.cancel()
-        _items.value = emptyList()
         initialFilled = false
         synchronized(pendingLock) { pendingItems.clear() }
         synchronized(bufferLock) {
@@ -135,7 +138,11 @@ object UnifiedFeedManager {
         streamJob = scope.launch {
             var failCount = 0
             while (isActive && failCount < MAX_RETRIES) {
-                _isLoading.value = _items.value.isEmpty()   // 有内容展示时不显示 loading
+                if (_items.value.isEmpty()) {
+                    _isLoading.value = true      // 无内容：显示 shimmer
+                } else {
+                    _isRefreshing.value = true   // 有内容：刷新按钮转圈
+                }
                 val success = readStream()
                 _isLoading.value = false
                 if (success) {
@@ -219,6 +226,7 @@ object UnifiedFeedManager {
             // 攒够了，一次性替换
             initialFilled = true
             _isLoading.value = false
+            _isRefreshing.value = false
             _items.value = readyItems
             FeedCache.save(readyItems)
         }

@@ -40,6 +40,7 @@ import com.getsolace.ai.chat.ui.components.SolaceAsyncImage
 fun AILabFeedScreen() {
     val feedItems     by UnifiedFeedManager.items.collectAsStateWithLifecycle()
     val isFeedLoading by UnifiedFeedManager.isLoading.collectAsStateWithLifecycle()
+    val isRefreshing  by UnifiedFeedManager.isRefreshing.collectAsStateWithLifecycle()
     val isLoadingMore by UnifiedFeedManager.isLoadingMore.collectAsStateWithLifecycle()
     val bufferCount   by UnifiedFeedManager.bufferCount.collectAsStateWithLifecycle()
     val proxyRunning  by SingBoxManager.isRunningFlow.collectAsStateWithLifecycle()
@@ -72,14 +73,22 @@ fun AILabFeedScreen() {
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(
-                    onClick = { UnifiedFeedManager.loadFeed() },
-                    enabled = !isFeedLoading
+                    onClick  = { UnifiedFeedManager.loadFeed() },
+                    enabled  = !isFeedLoading && !isRefreshing
                 ) {
-                    Icon(
-                        Icons.Default.Refresh,
-                        "刷新",
-                        tint = if (isFeedLoading) AccentPrimary.copy(alpha = 0.4f) else AccentPrimary
-                    )
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            color       = AccentPrimary,
+                            modifier    = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Refresh,
+                            "刷新",
+                            tint = if (isFeedLoading) AccentPrimary.copy(alpha = 0.4f) else AccentPrimary
+                        )
+                    }
                 }
             }
 
