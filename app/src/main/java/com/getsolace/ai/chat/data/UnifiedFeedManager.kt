@@ -35,21 +35,19 @@ object UnifiedFeedManager {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var streamJob: Job? = null
 
-    private const val MAX_ITEMS = 200
-    private const val INITIAL_FILL_COUNT = 6    // 首次填充条数
-    private const val FEED_URL = "https://image.pollinations.ai/feed"
-    private const val MAX_RETRIES = 3
-    private const val RETRY_DELAY_MS = 3_000L
+    private const val MAX_ITEMS         = 200
+    private const val INITIAL_FILL_COUNT = 6   // 新数据攒够几条后一次性替换缓存展示
+    private const val FEED_URL          = "https://image.pollinations.ai/feed"
+    private const val MAX_RETRIES       = 3
+    private const val RETRY_DELAY_MS    = 3_000L
 
-    // 主列表：首次 10 条展示给用户
+    // 展示给用户的主列表
     private val _items = MutableStateFlow<List<FeedItem>>(emptyList())
     val items: StateFlow<List<FeedItem>> = _items
 
-    // 缓冲区：首次填充后收到的新数据
+    // 缓冲区：initialFilled 后 SSE 新数据进这里，等用户上拉
     private val bufferLock = Any()
     private val buffer = mutableListOf<FeedItem>()
-
-    // UI 可观察缓冲区数量，用于显示「加载更多」按钮或角标
     private val _bufferCount = MutableStateFlow(0)
     val bufferCount: StateFlow<Int> = _bufferCount
 
@@ -60,18 +58,22 @@ object UnifiedFeedManager {
     val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
 
     private var isInitialized = false
-    @Volatile private var initialFilled = false
-    @Volatile private var usingCacheSnapshot = false  // 当前展示的是缓存快照，等待 SSE 数据替换
+
+    // SSE 数据静默预热区：攒够 INITIAL_FILL_COUNT 条后一次性替换 _items
+    private val pendingLock = Any()
+    private val pendingItems = mutableListOf<FeedItem>()
+    @Volatile private var initialFilled = false  // true 后新数据进 buffer
+
+    // ── Public API ────────────────────────────────────────────────────────────
 
     fun start() {
         if (isInitialized) return
         isInitialized = true
-        // 先展示缓存，避免首屏空白；SSE 数据到来后会自动替换
+        // 立即展示缓存，SSE 新数据在后台静默攒够后再替换
         val cached = FeedCache.load()
         if (cached.isNotEmpty()) {
             _items.value = cached
-            usingCacheSnapshot = true
-            // 注意：不设 initialFilled = true，SSE 数据到来时仍会走填充逻辑
+            _isLoading.value = false
         }
         connectStream()
     }
@@ -81,11 +83,12 @@ object UnifiedFeedManager {
         isInitialized = false
     }
 
+    /** 手动刷新：清空当前内容，重新连接 SSE */
     fun loadFeed() {
         streamJob?.cancel()
         _items.value = emptyList()
         initialFilled = false
-        usingCacheSnapshot = false
+        synchronized(pendingLock) { pendingItems.clear() }
         synchronized(bufferLock) {
             buffer.clear()
             _bufferCount.value = 0
@@ -93,16 +96,12 @@ object UnifiedFeedManager {
         connectStream()
     }
 
-    /** 将缓冲区数据追加到列表末尾
-     *  - 缓冲区有数据：直接追加，无 loading
-     *  - 缓冲区为空：显示 loading，等待 SSE 推送新数据后再追加（最多等 30s）
-     */
+    /** 上拉加载更多：将 buffer 追加到列表；buffer 为空时等待 SSE 新数据 */
     fun loadMore() {
         if (_isLoadingMore.value) return
         scope.launch {
             if (_bufferCount.value == 0) {
                 _isLoadingMore.value = true
-                // 等待 SSE 推送至少一条进入缓冲区，超时 30s 自动放弃
                 withTimeoutOrNull(30_000) {
                     _bufferCount.first { it > 0 }
                 }
@@ -111,6 +110,8 @@ object UnifiedFeedManager {
             _isLoadingMore.value = false
         }
     }
+
+    // ── Private ───────────────────────────────────────────────────────────────
 
     private fun flushBuffer() {
         val toAdd = synchronized(bufferLock) {
@@ -134,7 +135,7 @@ object UnifiedFeedManager {
         streamJob = scope.launch {
             var failCount = 0
             while (isActive && failCount < MAX_RETRIES) {
-                _isLoading.value = true
+                _isLoading.value = _items.value.isEmpty()   // 有内容展示时不显示 loading
                 val success = readStream()
                 _isLoading.value = false
                 if (success) {
@@ -165,16 +166,12 @@ object UnifiedFeedManager {
                     Log.e(TAG, "SSE 连接失败: HTTP ${response.code}")
                     return@withContext false
                 }
-
                 val source = response.body?.source() ?: return@withContext false
-
                 while (isActive && !source.exhausted()) {
                     val line = source.readUtf8Line() ?: break
                     if (!line.startsWith("data:")) continue
-
                     val jsonStr = line.removePrefix("data:").trim()
                     if (jsonStr.isEmpty()) continue
-
                     val item = parseItem(jsonStr) ?: continue
                     dispatchItem(item)
                 }
@@ -188,33 +185,42 @@ object UnifiedFeedManager {
         }
     }
 
-    /** 未完成首次填充 → 追加到主列表；首次填满后所有新数据 → 缓冲区 */
+    /**
+     * 数据分发：
+     * - initialFilled = false → 新数据进 pendingItems 静默预热
+     *   攒够 INITIAL_FILL_COUNT 条 → 一次性替换 _items，保存缓存
+     * - initialFilled = true  → 新数据进 buffer，等用户上拉
+     */
     private fun dispatchItem(item: FeedItem) {
-        if (usingCacheSnapshot) {
-            // 第一条 SSE 数据到来：用新数据直接替换缓存快照，避免空白闪烁
-            usingCacheSnapshot = false
-            initialFilled = false
-            _items.value = listOf(item)
-            return
-        }
-
-        if (!initialFilled) {
-            val current = _items.value
-            if (current.any { it.imageUrl == item.imageUrl }) return
-            val updated = current + item
-            _items.value = updated
-            if (updated.size >= INITIAL_FILL_COUNT) {
-                initialFilled = true
-                _isLoading.value = false
-                FeedCache.save(updated)   // 用最新的 10 条覆盖旧缓存
-            }
-        } else {
+        if (initialFilled) {
             synchronized(bufferLock) {
                 if (buffer.none { it.imageUrl == item.imageUrl }) {
                     buffer.add(item)
                     _bufferCount.value = buffer.size
                 }
             }
+            return
+        }
+
+        val readyItems = synchronized(pendingLock) {
+            if (pendingItems.none { it.imageUrl == item.imageUrl }) {
+                pendingItems.add(item)
+            }
+            if (pendingItems.size >= INITIAL_FILL_COUNT) {
+                val snapshot = pendingItems.toList()
+                pendingItems.clear()
+                snapshot
+            } else {
+                null
+            }
+        }
+
+        if (readyItems != null) {
+            // 攒够了，一次性替换
+            initialFilled = true
+            _isLoading.value = false
+            _items.value = readyItems
+            FeedCache.save(readyItems)
         }
     }
 
@@ -223,23 +229,20 @@ object UnifiedFeedManager {
             val obj = JSONObject(json)
             if (obj.optString("status") != "end_generating") return null
             if (obj.optBoolean("nsfw", false)) return null
-
             val imageUrl = obj.optString("imageURL").takeIf { it.isNotEmpty() } ?: return null
             val prompt = obj.optString("prompt", "")
-            // 翻译超时 3s，超时或失败时退回原文
             val promptCn = withTimeoutOrNull(3_000) {
                 TranslateUtil.toZh(prompt)
             } ?: prompt
-
             FeedItem(
-                id = imageUrl.hashCode().toString(),
+                id       = imageUrl.hashCode().toString(),
                 imageUrl = imageUrl,
-                prompt = prompt,
+                prompt   = prompt,
                 promptCn = promptCn,
-                width = obj.optInt("width", 512).coerceIn(64, 2048),
-                height = obj.optInt("height", 512).coerceIn(64, 2048),
-                model = obj.optString("model", "flux").ifEmpty { "flux" },
-                seed = obj.optLong("seed", 0L)
+                width    = obj.optInt("width", 512).coerceIn(64, 2048),
+                height   = obj.optInt("height", 512).coerceIn(64, 2048),
+                model    = obj.optString("model", "flux").ifEmpty { "flux" },
+                seed     = obj.optLong("seed", 0L)
             )
         } catch (e: Exception) {
             null
