@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -72,7 +73,8 @@ class AIViewModel(app: Application) : AndroidViewModel(app) {
 
         val cacheDir = getApplication<Application>().cacheDir
 
-        viewModelScope.launch {
+        // 整个生成流程在 IO 线程执行，避免翻译/网络阻塞主线程导致 ANR
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 val startTime    = System.currentTimeMillis()
                 val minDuration  = 3500L
@@ -149,7 +151,9 @@ class AIViewModel(app: Application) : AndroidViewModel(app) {
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private suspend fun buildFullPrompt(): String {
-        val base   = TranslateUtil.toEn(_prompt.value.trim())
+        val input  = _prompt.value.trim()
+        // 翻译超时 3s，超时或失败时直接用原文（避免卡住生成流程）
+        val base   = withTimeoutOrNull(3_000) { TranslateUtil.toEn(input) } ?: input
         val suffix = _selectedStyle.value.promptSuffix
         return "$base$suffix"
     }

@@ -165,6 +165,7 @@ public static *** d(...);
 -dontwarn okhttp3.**
 -keep class okhttp3.** { *; }
 -dontwarn okio.**
+-keep class okio.** { *; }
 
 # 明确保护 parseFrom 反射调用（MatrixCallAdapterFactory 通过反射调用 parseFrom）
 -keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite {
@@ -175,12 +176,38 @@ public static *** d(...);
 }
 
 
+# Kotlin Coroutines — suspend 函数状态机依赖 volatile 字段，必须保留
+-keep class kotlin.coroutines.** { *; }
+-keep class kotlinx.coroutines.** { *; }
+-dontwarn kotlinx.coroutines.**
+-keepclassmembernames class kotlinx.coroutines.** {
+    volatile <fields>;
+}
+-keepclassmembers class kotlin.coroutines.SafeContinuation {
+    volatile <fields>;
+}
+# Kotlin 元数据（反射/序列化依赖）
+-keep class kotlin.Metadata { *; }
+-keepclassmembers class ** {
+    @kotlin.Metadata *;
+}
+
+# UnifiedFeedManager 及 Feed 相关类完整保留
+-keep class com.getsolace.ai.chat.data.UnifiedFeedManager { *; }
+-keep class com.getsolace.ai.chat.data.FeedCache { *; }
+-keep class com.getsolace.ai.chat.network.TranslateUtil { *; }
+-keep class com.getsolace.ai.chat.network.AppNetworkClient { *; }
+
 -keep class io.nekohasekai.libbox.** { *; }
 
 # ── sing-box / VPN 相关 ────────────────────────────────────────────────────────
 # AIDL 生成类：Stub 通过反射绑定 IPC，类名和方法名不能被混淆
 -keep class com.getsolace.ai.aidl.** { *; }
 -keep interface com.getsolace.ai.aidl.** { *; }
+
+# Feed / Cache 数据类：Gson 反序列化依赖字段名，不能混淆
+-keep class com.getsolace.ai.chat.data.FeedItem { *; }
+-keep class com.getsolace.ai.chat.data.AIGeneratedImage { *; }
 
 # SingBoxService：Service 组件 + onBind + 内部 binder 实现
 -keep class com.getsolace.ai.chat.network.SingBoxService { *; }

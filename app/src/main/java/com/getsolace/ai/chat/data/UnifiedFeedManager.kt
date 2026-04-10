@@ -24,7 +24,6 @@ data class FeedItem(
     val seed: Long = 0L
 ) {
     val aspectRatio: Float get() = if (height > 0) width.toFloat() / height.toFloat() else 1f
-    /** 优先展示中文译文，无译文时退回英文原文 */
     val displayPrompt: String get() = promptCn.ifBlank { prompt }
 }
 
@@ -34,18 +33,17 @@ object UnifiedFeedManager {
     private const val TAG = "UnifiedFeedManager"
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var streamJob: Job? = null
+    private var translateJob: Job? = null
 
-    private const val MAX_ITEMS         = 200
-    private const val INITIAL_FILL_COUNT = 6   // 新数据攒够几条后一次性替换缓存展示
-    private const val FEED_URL          = "https://image.pollinations.ai/feed"
-    private const val MAX_RETRIES       = 3
-    private const val RETRY_DELAY_MS    = 3_000L
+    private const val MAX_ITEMS          = 200
+    private const val INITIAL_FILL_COUNT = 6
+    private const val FEED_URL           = "https://image.pollinations.ai/feed"
+    private const val MAX_RETRIES        = 3
+    private const val RETRY_DELAY_MS     = 3_000L
 
-    // 展示给用户的主列表
     private val _items = MutableStateFlow<List<FeedItem>>(emptyList())
     val items: StateFlow<List<FeedItem>> = _items
 
-    // 缓冲区：initialFilled 后 SSE 新数据进这里，等用户上拉
     private val bufferLock = Any()
     private val buffer = mutableListOf<FeedItem>()
     private val _bufferCount = MutableStateFlow(0)
@@ -54,7 +52,6 @@ object UnifiedFeedManager {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
-    // 有内容展示时后台拉取新数据的状态（刷新按钮 loading 用）
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
 
@@ -62,18 +59,15 @@ object UnifiedFeedManager {
     val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
 
     private var isInitialized = false
-
-    // SSE 数据静默预热区：攒够 INITIAL_FILL_COUNT 条后一次性替换 _items
     private val pendingLock = Any()
     private val pendingItems = mutableListOf<FeedItem>()
-    @Volatile private var initialFilled = false  // true 后新数据进 buffer
+    @Volatile private var initialFilled = false
 
     // ── Public API ────────────────────────────────────────────────────────────
 
     fun start() {
         if (isInitialized) return
         isInitialized = true
-        // 立即展示缓存，SSE 新数据在后台静默攒够后再替换
         val cached = FeedCache.load()
         if (cached.isNotEmpty()) {
             _items.value = cached
@@ -84,12 +78,13 @@ object UnifiedFeedManager {
 
     fun stop() {
         streamJob?.cancel()
+        translateJob?.cancel()
         isInitialized = false
     }
 
-    /** 刷新：保持当前内容可见，后台重新收集 SSE，攒够 INITIAL_FILL_COUNT 条后一次性替换 */
     fun loadFeed() {
         streamJob?.cancel()
+        translateJob?.cancel()
         initialFilled = false
         synchronized(pendingLock) { pendingItems.clear() }
         synchronized(bufferLock) {
@@ -99,15 +94,12 @@ object UnifiedFeedManager {
         connectStream()
     }
 
-    /** 上拉加载更多：将 buffer 追加到列表；buffer 为空时等待 SSE 新数据 */
     fun loadMore() {
         if (_isLoadingMore.value) return
         scope.launch {
             if (_bufferCount.value == 0) {
                 _isLoadingMore.value = true
-                withTimeoutOrNull(30_000) {
-                    _bufferCount.first { it > 0 }
-                }
+                withTimeoutOrNull(30_000) { _bufferCount.first { it > 0 } }
             }
             flushBuffer()
             _isLoadingMore.value = false
@@ -138,23 +130,17 @@ object UnifiedFeedManager {
         streamJob = scope.launch {
             var failCount = 0
             while (isActive && failCount < MAX_RETRIES) {
-                if (_items.value.isEmpty()) {
-                    _isLoading.value = true      // 无内容：显示 shimmer
-                } else {
-                    _isRefreshing.value = true   // 有内容：刷新按钮转圈
-                }
+                if (_items.value.isEmpty()) _isLoading.value = true
+                else _isRefreshing.value = true
                 val success = readStream()
                 _isLoading.value = false
-                if (success) {
-                    failCount = 0
-                } else {
+                if (success) failCount = 0
+                else {
                     failCount++
                     if (isActive && failCount < MAX_RETRIES) delay(RETRY_DELAY_MS)
                 }
             }
-            if (_items.value.isEmpty()) {
-                _items.value = generateFallbackItems()
-            }
+            if (_items.value.isEmpty()) _items.value = generateFallbackItems()
         }
     }
 
@@ -165,15 +151,18 @@ object UnifiedFeedManager {
             .header("Cache-Control", "no-cache")
             .build()
 
-        Log.d(TAG, "连接 Pollinations SSE proxy=${SingBoxManager.isRunning()}")
+        Log.w(TAG, "连接 Pollinations SSE proxy=${SingBoxManager.isRunning()}")
 
         try {
             AppNetworkClient.execute(request, connectSec = 15, readSec = 3600, writeSec = 15).use { response ->
                 if (!response.isSuccessful) {
-                    Log.e(TAG, "SSE 连接失败: HTTP ${response.code}")
+                    Log.e(TAG, "SSE 连接失败: HTTP ${response.code} ${response.message}")
                     return@withContext false
                 }
-                val source = response.body?.source() ?: return@withContext false
+                val source = response.body?.source() ?: run {
+                    Log.e(TAG, "SSE body source 为空")
+                    return@withContext false
+                }
                 while (isActive && !source.exhausted()) {
                     val line = source.readUtf8Line() ?: break
                     if (!line.startsWith("data:")) continue
@@ -192,12 +181,28 @@ object UnifiedFeedManager {
         }
     }
 
-    /**
-     * 数据分发：
-     * - initialFilled = false → 新数据进 pendingItems 静默预热
-     *   攒够 INITIAL_FILL_COUNT 条 → 一次性替换 _items，保存缓存
-     * - initialFilled = true  → 新数据进 buffer，等用户上拉
-     */
+    /** parseItem 不再翻译，直接解析原文，翻译由 translatePending 异步补充 */
+    private fun parseItem(json: String): FeedItem? {
+        return try {
+            val obj = JSONObject(json)
+            if (obj.optString("status") != "end_generating") return null
+            if (obj.optBoolean("nsfw", false)) return null
+            val imageUrl = obj.optString("imageURL").takeIf { it.isNotEmpty() } ?: return null
+            FeedItem(
+                id       = imageUrl.hashCode().toString(),
+                imageUrl = imageUrl,
+                prompt   = obj.optString("prompt", ""),
+                promptCn = "",  // 先留空，代理就绪后异步翻译
+                width    = obj.optInt("width", 512).coerceIn(64, 2048),
+                height   = obj.optInt("height", 512).coerceIn(64, 2048),
+                model    = obj.optString("model", "flux").ifEmpty { "flux" },
+                seed     = obj.optLong("seed", 0L)
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun dispatchItem(item: FeedItem) {
         if (initialFilled) {
             synchronized(bufferLock) {
@@ -210,50 +215,57 @@ object UnifiedFeedManager {
         }
 
         val readyItems = synchronized(pendingLock) {
-            if (pendingItems.none { it.imageUrl == item.imageUrl }) {
-                pendingItems.add(item)
-            }
+            if (pendingItems.none { it.imageUrl == item.imageUrl }) pendingItems.add(item)
             if (pendingItems.size >= INITIAL_FILL_COUNT) {
                 val snapshot = pendingItems.toList()
                 pendingItems.clear()
                 snapshot
-            } else {
-                null
-            }
+            } else null
         }
 
         if (readyItems != null) {
-            // 攒够了，一次性替换
             initialFilled = true
             _isLoading.value = false
             _isRefreshing.value = false
             _items.value = readyItems
             FeedCache.save(readyItems)
+            // 数据展示后，异步补翻译
+            translateItems(readyItems)
         }
     }
 
-    private suspend fun parseItem(json: String): FeedItem? {
-        return try {
-            val obj = JSONObject(json)
-            if (obj.optString("status") != "end_generating") return null
-            if (obj.optBoolean("nsfw", false)) return null
-            val imageUrl = obj.optString("imageURL").takeIf { it.isNotEmpty() } ?: return null
-            val prompt = obj.optString("prompt", "")
-            val promptCn = withTimeoutOrNull(3_000) {
-                TranslateUtil.toZh(prompt)
-            } ?: prompt
-            FeedItem(
-                id       = imageUrl.hashCode().toString(),
-                imageUrl = imageUrl,
-                prompt   = prompt,
-                promptCn = promptCn,
-                width    = obj.optInt("width", 512).coerceIn(64, 2048),
-                height   = obj.optInt("height", 512).coerceIn(64, 2048),
-                model    = obj.optString("model", "flux").ifEmpty { "flux" },
-                seed     = obj.optLong("seed", 0L)
-            )
-        } catch (e: Exception) {
-            null
+    /**
+     * 代理就绪后异步翻译列表中 promptCn 为空的条目，翻译完一条更新一次 _items。
+     * 只有代理运行时才执行，避免直连被墙导致阻塞。
+     */
+    private fun translateItems(targets: List<FeedItem>) {
+        translateJob?.cancel()
+        translateJob = scope.launch {
+            // 等待代理就绪，最多等 60s
+            val proxyReady = withTimeoutOrNull(60_000) {
+                SingBoxManager.isRunningFlow.first { it }
+            }
+            if (proxyReady != true) return@launch  // 代理没启动，跳过翻译
+
+            for (item in targets) {
+                if (!isActive) break
+                if (item.promptCn.isNotBlank()) continue
+                val cn = runCatching {
+                    withTimeoutOrNull(5_000) { TranslateUtil.toZh(item.prompt) }
+                }.getOrNull() ?: continue
+                if (cn == item.prompt) continue  // 翻译失败退回原文，不更新
+
+                // 在当前 _items 和 buffer 中找到该条目并替换
+                _items.value = _items.value.map {
+                    if (it.id == item.id) it.copy(promptCn = cn) else it
+                }
+                synchronized(bufferLock) {
+                    val idx = buffer.indexOfFirst { it.id == item.id }
+                    if (idx >= 0) buffer[idx] = buffer[idx].copy(promptCn = cn)
+                }
+            }
+            // 翻译完成后更新缓存
+            FeedCache.save(_items.value)
         }
     }
 
